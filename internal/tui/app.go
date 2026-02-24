@@ -480,28 +480,26 @@ func (a *App) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.mode = modeNormal
 		a.filterBar.filterMode = false
 		return a, nil
-	case "left", "h":
-		if a.filterBar.filterCursor > 0 {
-			a.filterBar.filterCursor--
-		}
+	case "j", "down":
+		a.filterBar.gridDown()
 		return a, nil
-	case "right", "l":
-		if a.filterBar.filterCursor < len(a.filterBar.sources)-1 {
-			a.filterBar.filterCursor++
-		}
+	case "k", "up":
+		a.filterBar.gridUp()
+		return a, nil
+	case "h", "left":
+		a.filterBar.gridLeft()
+		return a, nil
+	case "l", "right":
+		a.filterBar.gridRight()
 		return a, nil
 	case " ", "enter":
-		a.filterBar.toggleCurrent()
+		a.filterBar.toggleGrid()
 		a.cursor = 0
 		return a, a.loadArticlesCmd()
-	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		idx := int(msg.String()[0] - '1')
-		if idx < len(a.filterBar.sources) {
-			a.filterBar.toggle(a.filterBar.sources[idx])
-			a.cursor = 0
-			return a, a.loadArticlesCmd()
-		}
-		return a, nil
+	case "a":
+		a.filterBar.selectAll()
+		a.cursor = 0
+		return a, a.loadArticlesCmd()
 	}
 	return a, nil
 }
@@ -622,7 +620,15 @@ func (a *App) View() string {
 		status = lipgloss.NewStyle().Foreground(colorAccent).Render(a.err.Error())
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, filter, content, status)
+	view := lipgloss.JoinVertical(lipgloss.Left, header, filter, content, status)
+
+	// Overlay filter panel on top of the normal view
+	if a.mode == modeFilter {
+		overlay := a.filterBar.renderOverlay()
+		view = overlayCenter(view, overlay, a.width, a.height)
+	}
+
+	return view
 }
 
 func (a *App) maybeFetchSummary() tea.Cmd {
@@ -662,10 +668,10 @@ func (a *App) renderHelp() string {
 		"  /             Search articles\n" +
 		"  f             Toggle source filter mode\n\n" +
 		dim.Render("Filter Mode") + "\n" +
-		"  ←/→, h/l     Move between sources\n" +
+		"  ↑↓←→, hjkl   Navigate source grid\n" +
 		"  space/enter   Toggle source\n" +
-		"  1-9           Toggle source by number\n" +
-		"  esc, f        Exit filter mode\n\n" +
+		"  a             Select all sources\n" +
+		"  esc, f        Close filter overlay\n\n" +
 		dim.Render("General") + "\n" +
 		"  h             Go to home screen\n" +
 		"  ?             Toggle this help\n" +

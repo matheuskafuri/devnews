@@ -73,16 +73,6 @@ var (
 				Italic(true).
 				MarginTop(1)
 
-	tabActiveStyle = lipgloss.NewStyle().
-			Foreground(colorAccent).
-			Bold(true)
-
-	tabInactiveStyle = lipgloss.NewStyle().
-				Foreground(colorText)
-
-	tabSeparatorStyle = lipgloss.NewStyle().
-				Foreground(colorMuted)
-
 	statusBarStyle = lipgloss.NewStyle().
 			Background(colorSurface).
 			Foreground(colorMuted).
@@ -122,6 +112,11 @@ var (
 
 	briefingV2WhyStyle = lipgloss.NewStyle().
 				Foreground(briefingWhyColor)
+
+	filterOverlayStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(colorAccent).
+				Padding(1, 2)
 
 	categoryColors = map[string]lipgloss.Color{
 		"AI/ML":               lipgloss.Color("#DA70D6"),
