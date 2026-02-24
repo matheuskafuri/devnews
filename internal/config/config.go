@@ -24,6 +24,7 @@ type Source struct {
 
 type Config struct {
 	RefreshInterval string   `yaml:"refresh_interval"`
+	Retention       string   `yaml:"retention"`
 	Sources         []Source `yaml:"sources"`
 }
 
@@ -31,6 +32,24 @@ func (c *Config) RefreshDuration() time.Duration {
 	d, err := time.ParseDuration(c.RefreshInterval)
 	if err != nil {
 		return 1 * time.Hour
+	}
+	return d
+}
+
+func (c *Config) RetentionDuration() time.Duration {
+	if c.Retention == "" {
+		return 90 * 24 * time.Hour // default: 90 days
+	}
+	// Support "Nd" day syntax
+	if len(c.Retention) > 1 && c.Retention[len(c.Retention)-1] == 'd' {
+		var days int
+		if _, err := fmt.Sscanf(c.Retention, "%dd", &days); err == nil {
+			return time.Duration(days) * 24 * time.Hour
+		}
+	}
+	d, err := time.ParseDuration(c.Retention)
+	if err != nil {
+		return 90 * 24 * time.Hour
 	}
 	return d
 }

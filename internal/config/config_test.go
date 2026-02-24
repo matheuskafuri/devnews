@@ -33,6 +33,27 @@ func TestRefreshDuration(t *testing.T) {
 	}
 }
 
+func TestRetentionDuration(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantDays int
+	}{
+		{"90d", 90},
+		{"30d", 30},
+		{"720h", 30},
+		{"", 90},       // default
+		{"invalid", 90}, // fallback to default
+	}
+	for _, tt := range tests {
+		cfg := &Config{Retention: tt.input}
+		got := cfg.RetentionDuration()
+		wantHours := float64(tt.wantDays * 24)
+		if got.Hours() != wantHours {
+			t.Errorf("RetentionDuration(%q) = %v, want %dd", tt.input, got, tt.wantDays)
+		}
+	}
+}
+
 func TestEnabledSources(t *testing.T) {
 	cfg := &Config{
 		Sources: []Source{

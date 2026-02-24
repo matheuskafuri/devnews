@@ -197,6 +197,70 @@ func TestEmptyDB(t *testing.T) {
 	}
 }
 
+func TestPruneDeletesOldArticles(t *testing.T) {
+	db := testDB(t)
+	if err := db.UpsertArticles(sampleArticles()); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	// Post C is 48h old. Prune anything older than 24h.
+	deleted, err := db.Prune(24 * time.Hour)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if deleted != 1 {
+		t.Errorf("expected 1 pruned, got %d", deleted)
+	}
+
+	got, err := db.GetArticles(QueryOpts{})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("expected 2 remaining articles, got %d", len(got))
+	}
+}
+
+func TestPruneNothingToDelete(t *testing.T) {
+	db := testDB(t)
+	if err := db.UpsertArticles(sampleArticles()); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	deleted, err := db.Prune(365 * 24 * time.Hour)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if deleted != 0 {
+		t.Errorf("expected 0 pruned, got %d", deleted)
+	}
+}
+
+func TestStats(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	db, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.UpsertArticles(sampleArticles()); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	count, size, err := db.Stats(dbPath)
+	if err != nil {
+		t.Fatalf("stats: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("expected count 3, got %d", count)
+	}
+	if size == 0 {
+		t.Error("expected non-zero db size")
+	}
+}
+
 func TestOpenCreatesDir(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "sub", "deep", "test.db")

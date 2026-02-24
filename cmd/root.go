@@ -32,6 +32,8 @@ func init() {
 	rootCmd.Flags().StringVar(&flagConfig, "config", "", "path to config file")
 
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(pruneCmd)
+	rootCmd.AddCommand(statsCmd)
 }
 
 var versionCmd = &cobra.Command{

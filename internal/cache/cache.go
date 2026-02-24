@@ -180,6 +180,36 @@ func (c *Cache) NeedsRefresh(interval time.Duration) bool {
 	return time.Since(t) > interval
 }
 
+// Prune deletes articles older than the given retention duration and runs VACUUM.
+// Returns the number of deleted rows.
+func (c *Cache) Prune(retention time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-retention)
+	result, err := c.writeDB.Exec("DELETE FROM articles WHERE published < ?", cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("pruning articles: %w", err)
+	}
+	deleted, _ := result.RowsAffected()
+
+	if deleted > 0 {
+		if _, err := c.writeDB.Exec("VACUUM"); err != nil {
+			return deleted, fmt.Errorf("vacuum after prune: %w", err)
+		}
+	}
+	return deleted, nil
+}
+
+// Stats returns the total article count and database file size in bytes.
+func (c *Cache) Stats(dbPath string) (count int64, sizeBytes int64, err error) {
+	if err := c.readDB.QueryRow("SELECT COUNT(*) FROM articles").Scan(&count); err != nil {
+		return 0, 0, fmt.Errorf("counting articles: %w", err)
+	}
+	info, err := os.Stat(dbPath)
+	if err != nil {
+		return count, 0, nil // file might not exist yet
+	}
+	return count, info.Size(), nil
+}
+
 func (c *Cache) SetLastRefresh() error {
 	_, err := c.writeDB.Exec(`
 		INSERT INTO meta (key, value) VALUES ('last_refresh', ?)

@@ -1,4 +1,5 @@
 refresh_interval: 1h
+retention: 90d
 sources:
   - name: Cloudflare
     type: rss

@@ -76,6 +76,9 @@ devnews --since 7d               # only show articles from last 7 days
 devnews --since 24h              # only show articles from last 24 hours
 devnews --refresh                # force refresh feeds before launching
 devnews --config path/to/file    # use a custom config file
+devnews stats                    # show cache size and article count
+devnews prune                    # delete articles older than retention period
+devnews prune --older-than 30d   # delete articles older than 30 days
 devnews version                  # print version info
 ```
 
@@ -123,6 +126,7 @@ On first run, a default config is written to `~/.config/devnews/config.yaml` (fo
 
 ```yaml
 refresh_interval: 1h
+retention: 90d
 sources:
   - name: Cloudflare
     type: rss
@@ -172,6 +176,14 @@ Set `enabled: false` to hide a source without removing it:
 refresh_interval: 30m   # fetch new articles every 30 minutes
 ```
 
+### Changing retention period
+
+Articles older than the retention period are automatically deleted after each feed refresh. Default is 90 days.
+
+```yaml
+retention: 30d   # keep only the last 30 days of articles
+```
+
 ## Default sources
 
 | Source | URL |
@@ -185,12 +197,34 @@ refresh_interval: 30m   # fetch new articles every 30 minutes
 | Slack | https://slack.engineering/feed/ |
 | Dropbox | https://dropbox.tech/feed |
 
+## Storage
+
+devnews caches articles in a local SQLite database at `~/.cache/devnews/devnews.db` (XDG-compliant).
+
+**Auto-pruning**: after each feed refresh, articles older than the `retention` period (default: 90 days) are automatically deleted and the database is vacuumed to reclaim disk space.
+
+**Manual management**:
+
+```bash
+# Check how many articles are cached and how much space they use
+devnews stats
+
+# Delete articles older than the configured retention period
+devnews prune
+
+# Delete articles older than a specific duration
+devnews prune --older-than 14d
+```
+
+With 8 default sources, the database typically stays under 200 KB.
+
 ## How it works
 
 1. **Fetch** — devnews concurrently fetches RSS/Atom feeds from all enabled sources
-2. **Cache** — articles are stored in a local SQLite database at `~/.cache/devnews/devnews.db`
-3. **Display** — a bubbletea TUI renders a two-pane interface with list + preview
-4. **Refresh** — feeds are re-fetched when the configured interval has elapsed, or on demand with `r` or `--refresh`
+2. **Cache** — articles are stored in a local SQLite database (see [Storage](#storage))
+3. **Prune** — old articles are automatically deleted after each refresh based on the retention period
+4. **Display** — a bubbletea TUI renders a two-pane interface with list + preview
+5. **Refresh** — feeds are re-fetched when the configured interval has elapsed, or on demand with `r` or `--refresh`
 
 No CGo required — the SQLite driver is pure Go (`modernc.org/sqlite`), so the binary is fully self-contained and works on any platform without external dependencies.
 

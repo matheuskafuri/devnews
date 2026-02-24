@@ -39,6 +39,9 @@ func runTUI(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("caching articles: %w", err)
 		}
 		db.SetLastRefresh()
+
+		// Auto-prune old articles after refresh
+		db.Prune(cfg.RetentionDuration())
 	}
 
 	// Parse --since
