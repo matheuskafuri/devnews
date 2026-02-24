@@ -17,19 +17,27 @@ sources:
     type: rss
     url: https://netflixtechblog.com/feed
     enabled: true
-  - name: Uber
+  - name: Meta
     type: rss
-    url: https://eng.uber.com/feed/
+    url: https://engineering.fb.com/feed/
     enabled: true
-  - name: LinkedIn
+  - name: Spotify
     type: rss
-    url: https://engineering.linkedin.com/blog.rss.html
+    url: https://engineering.atspotify.com/feed/
     enabled: true
   - name: Slack
     type: rss
     url: https://slack.engineering/feed/
     enabled: true
-  - name: Dropbox
+  - name: Vercel
+    type: atom
+    url: https://vercel.com/atom
+    enabled: true
+  - name: Figma
+    type: atom
+    url: https://www.figma.com/blog/feed/atom.xml
+    enabled: true
+  - name: Lyft
     type: rss
-    url: https://dropbox.tech/feed
+    url: https://eng.lyft.com/feed
     enabled: true

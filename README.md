@@ -192,10 +192,12 @@ retention: 30d   # keep only the last 30 days of articles
 | GitHub | https://github.blog/engineering/feed/ |
 | Stripe | https://stripe.com/blog/feed.rss |
 | Netflix | https://netflixtechblog.com/feed |
-| Uber | https://eng.uber.com/feed/ |
-| LinkedIn | https://engineering.linkedin.com/blog.rss.html |
+| Meta | https://engineering.fb.com/feed/ |
+| Spotify | https://engineering.atspotify.com/feed/ |
 | Slack | https://slack.engineering/feed/ |
-| Dropbox | https://dropbox.tech/feed |
+| Vercel | https://vercel.com/atom |
+| Figma | https://www.figma.com/blog/feed/atom.xml |
+| Lyft | https://eng.lyft.com/feed |
 
 ## Storage
 
