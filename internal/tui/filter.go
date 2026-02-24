@@ -92,5 +92,9 @@ func (f *filterBar) render(width int) string {
 		row = candidate
 	}
 
-	return " " + row
+	barStyle := lipgloss.NewStyle().
+		Background(colorSurface).
+		Width(width).
+		PaddingLeft(1)
+	return barStyle.Render(row)
 }

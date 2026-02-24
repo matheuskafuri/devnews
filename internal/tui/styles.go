@@ -78,10 +78,10 @@ var (
 			Bold(true)
 
 	tabInactiveStyle = lipgloss.NewStyle().
-				Foreground(colorDim)
+				Foreground(colorText)
 
 	tabSeparatorStyle = lipgloss.NewStyle().
-				Foreground(colorDim)
+				Foreground(colorMuted)
 
 	statusBarStyle = lipgloss.NewStyle().
 			Background(colorSurface).
