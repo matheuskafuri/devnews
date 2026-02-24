@@ -70,8 +70,6 @@ func runApp(browseMode bool) error {
 		summarizer, _ = ai.New(cfg.AI, cfg.AIKey())
 	}
 
-	sourceWeights := cfg.SourceWeights()
-
 	// Generate V2 briefing (unless browse mode)
 	var briefingV2 *briefing.Briefing
 	if !browseMode {
@@ -101,7 +99,6 @@ func runApp(browseMode bool) error {
 			Since:         briefingSince,
 			BriefSize:     cfg.GetBriefSize(),
 			FocusCategory: focusCategory,
-			SourceWeights: sourceWeights,
 		})
 		if err == nil {
 			briefingV2 = b
@@ -111,14 +108,14 @@ func runApp(browseMode bool) error {
 	db.SetLastOpened()
 
 	return tui.Run(tui.RunOpts{
-		Cfg:           cfg,
-		DB:            db,
-		Since:         since,
-		Streak:        streak,
-		Summarizer:    summarizer,
-		BrowseMode:    browseMode,
-		BriefingV2:    briefingV2,
-		SourceWeights: sourceWeights,
+		Cfg:            cfg,
+		DB:             db,
+		Since:          since,
+		Streak:         streak,
+		Summarizer:     summarizer,
+		BrowseMode:     browseMode,
+		BriefingV2:     briefingV2,
+		CurrentVersion: Version(),
 	})
 }
 

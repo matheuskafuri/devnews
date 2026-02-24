@@ -10,7 +10,6 @@ import (
 
 	"github.com/matheuskafuri/devnews/internal/cache"
 	"github.com/matheuskafuri/devnews/internal/classify"
-	"github.com/matheuskafuri/devnews/internal/signal"
 )
 
 // Briefing holds briefing data for both V2 (card-based) and V1 (legacy header) modes.
@@ -44,7 +43,6 @@ type GenerateOpts struct {
 	Since         time.Time
 	BriefSize     int
 	FocusCategory string
-	SourceWeights map[string]float64
 }
 
 // Generate creates a V2 briefing by scoring, classifying, and selecting top articles.
@@ -72,24 +70,17 @@ func Generate(opts GenerateOpts) (*Briefing, error) {
 		return b, nil
 	}
 
-	// Score and classify each article
+	// Classify each article
 	for i := range articles {
-		input := signal.Input{
-			Title:       articles[i].Title,
-			Description: articles[i].Description,
-			Source:      articles[i].Source,
-			Published:   articles[i].Published,
-		}
-		articles[i].SignalScore = signal.Score(input, opts.SourceWeights)
 		articles[i].Category = string(classify.Classify(articles[i].Title, articles[i].Description))
 
 		// Persist to cache (non-blocking, best-effort)
-		opts.DB.UpdateArticleSignal(articles[i].ID, articles[i].SignalScore, articles[i].Category)
+		opts.DB.UpdateArticleCategory(articles[i].ID, articles[i].Category)
 	}
 
-	// Sort by signal score descending
+	// Sort by published date descending (already sorted from DB, but ensure after classification)
 	sort.Slice(articles, func(i, j int) bool {
-		return articles[i].SignalScore > articles[j].SignalScore
+		return articles[i].Published.After(articles[j].Published)
 	})
 
 	// Filter by focus category if set

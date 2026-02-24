@@ -6,8 +6,6 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/matheuskafuri/devnews/internal/briefing"
-	"github.com/matheuskafuri/devnews/internal/cache"
-	"github.com/matheuskafuri/devnews/internal/signal"
 )
 
 func renderOpeningScreen(b *briefing.Briefing, height int) string {
@@ -16,7 +14,6 @@ func renderOpeningScreen(b *briefing.Briefing, height int) string {
 	title := briefingV2TitleStyle.Render(fmt.Sprintf("DevNews — %s", b.DateLabel))
 	lines = append(lines, "", "  "+title, "")
 
-	lines = append(lines, "  "+briefingV2MetaStyle.Render(fmt.Sprintf("Signal status: %s", b.Freshness)))
 	lines = append(lines, "  "+briefingV2MetaStyle.Render(fmt.Sprintf("Posts scanned: %d", b.Scanned)))
 
 	if b.Focus != "" {
@@ -44,7 +41,7 @@ func renderOpeningScreen(b *briefing.Briefing, height int) string {
 	return strings.Repeat("\n", topPad) + content
 }
 
-func renderCardView(card briefing.Card, total int, width, height int, showBreakdown bool, sourceWeights signal.SourceWeights) string {
+func renderCardView(card briefing.Card, total int, width, height int) string {
 	// Card inner width
 	cardWidth := width - 8
 	if cardWidth < 30 {
@@ -62,10 +59,10 @@ func renderCardView(card briefing.Card, total int, width, height int, showBreakd
 	body = append(body, briefingV2TitleStyle.Render(card.Article.Title))
 	body = append(body, "")
 
-	// Category · reading time · signal
+	// Category · reading time
 	catStyle := categoryStyle(card.Article.Category)
 	meta := catStyle.Render(card.Article.Category) +
-		briefingV2MetaStyle.Render(fmt.Sprintf("  ·  %d min  ·  Signal %.1f", card.ReadingTime, card.Article.SignalScore))
+		briefingV2MetaStyle.Render(fmt.Sprintf("  ·  %d min", card.ReadingTime))
 	body = append(body, meta)
 
 	// Why it matters
@@ -99,10 +96,6 @@ func renderCardView(card briefing.Card, total int, width, height int, showBreakd
 
 	content := strings.Join(lines, "\n")
 
-	if showBreakdown {
-		content += "\n\n" + renderSignalBreakdownOverlay(card.Article, sourceWeights)
-	}
-
 	contentLines := strings.Count(content, "\n") + 1
 	topPad := (height - contentLines) / 3
 	if topPad < 0 {
@@ -110,30 +103,4 @@ func renderCardView(card briefing.Card, total int, width, height int, showBreakd
 	}
 
 	return strings.Repeat("\n", topPad) + content
-}
-
-func renderSignalBreakdownOverlay(a cache.Article, weights signal.SourceWeights) string {
-	input := signal.Input{
-		Title:       a.Title,
-		Description: a.Description,
-		Source:      a.Source,
-		Published:   a.Published,
-	}
-	b := signal.ScoreWithBreakdown(input, weights)
-
-	var lines []string
-	lines = append(lines, "  "+briefingV2TitleStyle.Render("Signal Score Breakdown"))
-	lines = append(lines, "")
-	lines = append(lines, fmt.Sprintf("  Source weight:         %.2f", b.SourceWeight))
-	lines = append(lines, fmt.Sprintf("  Depth score:           %.2f", b.Depth))
-	lines = append(lines, fmt.Sprintf("  Recency score:         %.2f", b.Recency))
-	lines = append(lines, fmt.Sprintf("  Keyword density score: %.2f", b.KeywordDensity))
-	lines = append(lines, "")
-	lines = append(lines, fmt.Sprintf("  Final: %.1f", b.Final))
-
-	styled := make([]string, len(lines))
-	for i, l := range lines {
-		styled[i] = briefingV2BodyStyle.Render(l)
-	}
-	return strings.Join(styled, "\n")
 }

@@ -58,3 +58,8 @@ func SetVersionInfo(v, c, d string) {
 	commit = c
 	date = d
 }
+
+// Version returns the current build version string.
+func Version() string {
+	return version
+}

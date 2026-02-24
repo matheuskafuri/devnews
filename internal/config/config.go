@@ -16,11 +16,10 @@ import (
 var defaultConfigFS embed.FS
 
 type Source struct {
-	Name    string  `yaml:"name"`
-	Type    string  `yaml:"type"`
-	URL     string  `yaml:"url"`
-	Enabled bool    `yaml:"enabled"`
-	Weight  float64 `yaml:"weight,omitempty"`
+	Name    string `yaml:"name"`
+	Type    string `yaml:"type"`
+	URL     string `yaml:"url"`
+	Enabled bool   `yaml:"enabled"`
 }
 
 type AIConfig struct {
@@ -108,19 +107,6 @@ func (c *Config) GetBriefSize() int {
 		return 5
 	}
 	return c.BriefSize
-}
-
-// SourceWeights builds a map of source name → weight for signal scoring.
-func (c *Config) SourceWeights() map[string]float64 {
-	weights := make(map[string]float64)
-	for _, s := range c.Sources {
-		if s.Weight > 0 {
-			weights[s.Name] = s.Weight
-		} else {
-			weights[s.Name] = 0.5
-		}
-	}
-	return weights
 }
 
 func DefaultConfigPath() string {

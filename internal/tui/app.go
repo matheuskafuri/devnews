@@ -16,7 +16,7 @@ import (
 	"github.com/matheuskafuri/devnews/internal/cache"
 	"github.com/matheuskafuri/devnews/internal/config"
 	"github.com/matheuskafuri/devnews/internal/feed"
-	"github.com/matheuskafuri/devnews/internal/signal"
+	"github.com/matheuskafuri/devnews/internal/update"
 )
 
 type focusPane int
@@ -64,22 +64,22 @@ type App struct {
 	currentDate        string
 	streak             int
 	err                error
-	briefingV2          *briefing.Briefing
-	cardCursor          int
-	showSignalBreakdown bool
-	sourceWeights      signal.SourceWeights
+	briefingV2     *briefing.Briefing
+	cardCursor     int
+	currentVersion string
+	updateVersion  string
 }
 
 // RunOpts holds all parameters for launching the TUI.
 type RunOpts struct {
-	Cfg           *config.Config
-	DB            *cache.Cache
-	Since         time.Time
-	Streak        int
-	Summarizer    ai.Summarizer
-	BrowseMode    bool
-	BriefingV2    *briefing.Briefing
-	SourceWeights signal.SourceWeights
+	Cfg            *config.Config
+	DB             *cache.Cache
+	Since          time.Time
+	Streak         int
+	Summarizer     ai.Summarizer
+	BrowseMode     bool
+	BriefingV2     *briefing.Briefing
+	CurrentVersion string
 }
 
 func NewApp(opts RunOpts) *App {
@@ -107,9 +107,9 @@ func NewApp(opts RunOpts) *App {
 		searchInput:   ti,
 		spinner:       sp,
 		currentDate:   time.Now().Format("Jan 2"),
-		mode:          startMode,
-		briefingV2:    opts.BriefingV2,
-		sourceWeights: opts.SourceWeights,
+		mode:           startMode,
+		briefingV2:     opts.BriefingV2,
+		currentVersion: opts.CurrentVersion,
 	}
 }
 
@@ -125,6 +125,20 @@ func (a *App) Init() tea.Cmd {
 	if a.summarizer != nil && a.briefingV2 != nil {
 		cmds = append(cmds, a.fetchWhyItMatters()...)
 		cmds = append(cmds, a.fetchThemes())
+	}
+
+	// Async update check
+	if a.currentVersion != "" && a.currentVersion != "dev" && a.db.ShouldCheckUpdate() {
+		db := a.db
+		ver := a.currentVersion
+		cmds = append(cmds, func() tea.Msg {
+			result := update.Check(context.Background(), ver)
+			db.SetLastUpdateCheck()
+			if result != nil {
+				return updateAvailableMsg{version: result.LatestVersion}
+			}
+			return nil
+		})
 	}
 
 	return tea.Batch(cmds...)
@@ -275,6 +289,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case updateAvailableMsg:
+		a.updateVersion = msg.version
+		return a, nil
+
 	case spinner.TickMsg:
 		if a.refreshing {
 			var cmd tea.Cmd
@@ -413,22 +431,17 @@ func (a *App) handleBriefingCardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "n", "j", "right":
 		if a.briefingV2 != nil && a.cardCursor < len(a.briefingV2.Cards)-1 {
 			a.cardCursor++
-			a.showSignalBreakdown = false
 		}
 		return a, nil
 	case "p", "k", "left":
 		if a.cardCursor > 0 {
 			a.cardCursor--
-			a.showSignalBreakdown = false
 		}
 		return a, nil
 	case "o", "enter":
 		if a.briefingV2 != nil && a.cardCursor < len(a.briefingV2.Cards) {
 			return a, openBrowserCmd(a.briefingV2.Cards[a.cardCursor].Article.Link)
 		}
-		return a, nil
-	case "i":
-		a.showSignalBreakdown = !a.showSignalBreakdown
 		return a, nil
 	case "e":
 		a.mode = modeNormal
@@ -513,7 +526,7 @@ func (a *App) View() string {
 
 	if a.mode == modeHome {
 		hasBriefing := a.briefingV2 != nil && len(a.briefingV2.Cards) > 0
-		return a.withBottomBar(renderHomeScreen(a.width, a.height, hasBriefing), "b briefing  e browse  q quit")
+		return a.withBottomBar(renderHomeScreen(a.width, a.height, hasBriefing, a.updateVersion), "b briefing  e browse  q quit")
 	}
 
 	if a.mode == modeBriefingOpening && a.briefingV2 != nil {
@@ -522,8 +535,8 @@ func (a *App) View() string {
 
 	if a.mode == modeBriefingCard && a.briefingV2 != nil && a.cardCursor < len(a.briefingV2.Cards) {
 		return a.withBottomBar(
-			renderCardView(a.briefingV2.Cards[a.cardCursor], len(a.briefingV2.Cards), a.width, a.height, a.showSignalBreakdown, a.sourceWeights),
-			"n next  p prev  o open  i info  e browse  h home  q quit",
+			renderCardView(a.briefingV2.Cards[a.cardCursor], len(a.briefingV2.Cards), a.width, a.height),
+			"n next  p prev  o open  e browse  h home  q quit",
 		)
 	}
 

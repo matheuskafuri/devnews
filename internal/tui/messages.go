@@ -33,3 +33,7 @@ type themesMsg struct {
 	themes []string
 }
 
+type updateAvailableMsg struct {
+	version string
+}
+

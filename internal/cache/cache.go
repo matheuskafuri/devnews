@@ -74,7 +74,6 @@ func (c *Cache) init() error {
 	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN signal_score REAL NOT NULL DEFAULT 0")
 	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN category TEXT NOT NULL DEFAULT ''")
 	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN why_it_matters TEXT NOT NULL DEFAULT ''")
-	c.writeDB.Exec("CREATE INDEX IF NOT EXISTS idx_articles_signal ON articles(signal_score DESC)")
 
 	return nil
 }
@@ -156,16 +155,12 @@ func (c *Cache) GetArticles(opts QueryOpts) ([]Article, error) {
 		args = append(args, opts.Category)
 	}
 
-	query := "SELECT id, source, title, link, description, published, fetched_at, summary, tags, signal_score, category, why_it_matters FROM articles"
+	query := "SELECT id, source, title, link, description, published, fetched_at, summary, tags, category, why_it_matters FROM articles"
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
 
-	if opts.OrderBy == "signal" {
-		query += " ORDER BY signal_score DESC"
-	} else {
-		query += " ORDER BY published DESC"
-	}
+	query += " ORDER BY published DESC"
 
 	limit := opts.Limit
 	if limit <= 0 {
@@ -182,7 +177,7 @@ func (c *Cache) GetArticles(opts QueryOpts) ([]Article, error) {
 	var articles []Article
 	for rows.Next() {
 		var a Article
-		if err := rows.Scan(&a.ID, &a.Source, &a.Title, &a.Link, &a.Description, &a.Published, &a.FetchedAt, &a.Summary, &a.Tags, &a.SignalScore, &a.Category, &a.WhyItMatters); err != nil {
+		if err := rows.Scan(&a.ID, &a.Source, &a.Title, &a.Link, &a.Description, &a.Published, &a.FetchedAt, &a.Summary, &a.Tags, &a.Category, &a.WhyItMatters); err != nil {
 			return nil, fmt.Errorf("scanning article: %w", err)
 		}
 		articles = append(articles, a)
@@ -313,7 +308,7 @@ func (c *Cache) SetLastOpened() error {
 // GetArticlesSince returns articles published after the given time.
 func (c *Cache) GetArticlesSince(since time.Time) ([]Article, error) {
 	rows, err := c.readDB.Query(
-		"SELECT id, source, title, link, description, published, fetched_at, summary, tags, signal_score, category, why_it_matters FROM articles WHERE published >= ? ORDER BY published DESC",
+		"SELECT id, source, title, link, description, published, fetched_at, summary, tags, category, why_it_matters FROM articles WHERE published >= ? ORDER BY published DESC",
 		since,
 	)
 	if err != nil {
@@ -324,7 +319,7 @@ func (c *Cache) GetArticlesSince(since time.Time) ([]Article, error) {
 	var articles []Article
 	for rows.Next() {
 		var a Article
-		if err := rows.Scan(&a.ID, &a.Source, &a.Title, &a.Link, &a.Description, &a.Published, &a.FetchedAt, &a.Summary, &a.Tags, &a.SignalScore, &a.Category, &a.WhyItMatters); err != nil {
+		if err := rows.Scan(&a.ID, &a.Source, &a.Title, &a.Link, &a.Description, &a.Published, &a.FetchedAt, &a.Summary, &a.Tags, &a.Category, &a.WhyItMatters); err != nil {
 			return nil, err
 		}
 		articles = append(articles, a)
@@ -332,9 +327,9 @@ func (c *Cache) GetArticlesSince(since time.Time) ([]Article, error) {
 	return articles, rows.Err()
 }
 
-// UpdateArticleSignal saves the signal score and category for an article.
-func (c *Cache) UpdateArticleSignal(id string, score float64, category string) error {
-	_, err := c.writeDB.Exec("UPDATE articles SET signal_score = ?, category = ? WHERE id = ?", score, category, id)
+// UpdateArticleCategory saves the category for an article.
+func (c *Cache) UpdateArticleCategory(id, category string) error {
+	_, err := c.writeDB.Exec("UPDATE articles SET category = ? WHERE id = ?", category, id)
 	return err
 }
 
@@ -344,13 +339,21 @@ func (c *Cache) UpdateArticleWhyItMatters(id, text string) error {
 	return err
 }
 
-// GetTopArticles returns the top articles by signal score since the given time.
-func (c *Cache) GetTopArticles(since time.Time, limit int, category string) ([]Article, error) {
-	opts := QueryOpts{
-		Since:    since,
-		Category: category,
-		OrderBy:  "signal",
-		Limit:    limit,
+// ShouldCheckUpdate returns true if the last update check was more than 24 hours ago or never happened.
+func (c *Cache) ShouldCheckUpdate() bool {
+	value, err := c.getMeta("last_update_check")
+	if err != nil {
+		return true
 	}
-	return c.GetArticles(opts)
+	t, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return true
+	}
+	return time.Since(t) > 24*time.Hour
 }
+
+// SetLastUpdateCheck records the current time as the last update check.
+func (c *Cache) SetLastUpdateCheck() error {
+	return c.setMeta("last_update_check", time.Now().Format(time.RFC3339))
+}
+

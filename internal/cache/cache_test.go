@@ -367,22 +367,19 @@ func TestGetArticlesSince(t *testing.T) {
 	}
 }
 
-func TestUpdateArticleSignal(t *testing.T) {
+func TestUpdateArticleCategory(t *testing.T) {
 	db := testDB(t)
 	if err := db.UpsertArticles(sampleArticles()); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 
-	if err := db.UpdateArticleSignal("aaa", 8.7, "Infrastructure"); err != nil {
-		t.Fatalf("UpdateArticleSignal: %v", err)
+	if err := db.UpdateArticleCategory("aaa", "Infrastructure"); err != nil {
+		t.Fatalf("UpdateArticleCategory: %v", err)
 	}
 
 	articles, _ := db.GetArticles(QueryOpts{})
 	for _, a := range articles {
 		if a.ID == "aaa" {
-			if a.SignalScore != 8.7 {
-				t.Errorf("expected signal score 8.7, got %.1f", a.SignalScore)
-			}
 			if a.Category != "Infrastructure" {
 				t.Errorf("expected category Infrastructure, got %q", a.Category)
 			}
@@ -414,38 +411,15 @@ func TestUpdateArticleWhyItMatters(t *testing.T) {
 	t.Error("article bbb not found")
 }
 
-func TestSignalOrdering(t *testing.T) {
-	db := testDB(t)
-	if err := db.UpsertArticles(sampleArticles()); err != nil {
-		t.Fatalf("upsert: %v", err)
-	}
-
-	// Set different signal scores
-	db.UpdateArticleSignal("aaa", 5.0, "")
-	db.UpdateArticleSignal("bbb", 9.0, "")
-	db.UpdateArticleSignal("ccc", 7.0, "")
-
-	got, err := db.GetArticles(QueryOpts{OrderBy: "signal"})
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if len(got) != 3 {
-		t.Fatalf("expected 3 articles, got %d", len(got))
-	}
-	if got[0].ID != "bbb" {
-		t.Errorf("expected highest signal first (bbb), got %s", got[0].ID)
-	}
-}
-
 func TestCategoryFilter(t *testing.T) {
 	db := testDB(t)
 	if err := db.UpsertArticles(sampleArticles()); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 
-	db.UpdateArticleSignal("aaa", 8.0, "Infrastructure")
-	db.UpdateArticleSignal("bbb", 7.0, "AI/ML")
-	db.UpdateArticleSignal("ccc", 6.0, "Infrastructure")
+	db.UpdateArticleCategory("aaa", "Infrastructure")
+	db.UpdateArticleCategory("bbb", "AI/ML")
+	db.UpdateArticleCategory("ccc", "Infrastructure")
 
 	got, err := db.GetArticles(QueryOpts{Category: "Infrastructure"})
 	if err != nil {
@@ -453,28 +427,6 @@ func TestCategoryFilter(t *testing.T) {
 	}
 	if len(got) != 2 {
 		t.Errorf("expected 2 Infrastructure articles, got %d", len(got))
-	}
-}
-
-func TestGetTopArticles(t *testing.T) {
-	db := testDB(t)
-	if err := db.UpsertArticles(sampleArticles()); err != nil {
-		t.Fatalf("upsert: %v", err)
-	}
-
-	db.UpdateArticleSignal("aaa", 5.0, "")
-	db.UpdateArticleSignal("bbb", 9.0, "")
-	db.UpdateArticleSignal("ccc", 7.0, "")
-
-	got, err := db.GetTopArticles(time.Now().Add(-72*time.Hour), 2, "")
-	if err != nil {
-		t.Fatalf("GetTopArticles: %v", err)
-	}
-	if len(got) != 2 {
-		t.Errorf("expected 2 top articles, got %d", len(got))
-	}
-	if len(got) > 0 && got[0].ID != "bbb" {
-		t.Errorf("expected bbb first, got %s", got[0].ID)
 	}
 }
 

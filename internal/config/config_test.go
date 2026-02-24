@@ -145,26 +145,6 @@ func TestGetBriefSizeCustom(t *testing.T) {
 	}
 }
 
-func TestSourceWeights(t *testing.T) {
-	cfg := &Config{
-		Sources: []Source{
-			{Name: "Stripe", Weight: 0.9},
-			{Name: "GitHub", Weight: 0},
-			{Name: "Netflix"},
-		},
-	}
-	weights := cfg.SourceWeights()
-	if weights["Stripe"] != 0.9 {
-		t.Errorf("expected Stripe weight 0.9, got %.1f", weights["Stripe"])
-	}
-	if weights["GitHub"] != 0.5 {
-		t.Errorf("expected GitHub default weight 0.5, got %.1f", weights["GitHub"])
-	}
-	if weights["Netflix"] != 0.5 {
-		t.Errorf("expected Netflix default weight 0.5, got %.1f", weights["Netflix"])
-	}
-}
-
 func TestDefaultConfigHasBriefSize(t *testing.T) {
 	cfg, err := loadDefaults()
 	if err != nil {

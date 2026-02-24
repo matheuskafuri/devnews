@@ -42,3 +42,31 @@ sources:
     type: rss
     url: https://eng.lyft.com/feed
     enabled: true
+  - name: OpenAI
+    type: rss
+    url: https://openai.com/news/engineering/rss.xml
+    enabled: true
+  - name: PlanetScale
+    type: atom
+    url: https://planetscale.com/blog/feed.atom
+    enabled: true
+  - name: Uber
+    type: rss
+    url: https://www.uber.com/blog/engineering/rss/
+    enabled: true
+  - name: Shopify
+    type: atom
+    url: https://shopifyengineering.myshopify.com/blogs/engineering.atom
+    enabled: true
+  - name: Pragmatic Engineer
+    type: rss
+    url: https://blog.pragmaticengineer.com/rss/
+    enabled: true
+  - name: DeepMind
+    type: rss
+    url: https://deepmind.com/blog/feed/basic/
+    enabled: true
+  - name: MIT AI
+    type: rss
+    url: http://news.mit.edu/rss/topic/artificial-intelligence2
+    enabled: true
