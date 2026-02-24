@@ -161,7 +161,23 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
+	// Merge any new default sources the user doesn't have yet
+	mergeNewSources(&cfg, defaults)
+
 	return &cfg, nil
+}
+
+// mergeNewSources appends sources from defaults that don't exist in cfg (by name).
+func mergeNewSources(cfg *Config, defaults *Config) {
+	existing := make(map[string]bool, len(cfg.Sources))
+	for _, s := range cfg.Sources {
+		existing[s.Name] = true
+	}
+	for _, s := range defaults.Sources {
+		if !existing[s.Name] {
+			cfg.Sources = append(cfg.Sources, s)
+		}
+	}
 }
 
 func writeDefaults(path string) error {

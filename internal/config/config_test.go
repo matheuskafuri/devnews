@@ -110,11 +110,13 @@ sources:
 	if cfg.RefreshInterval != "2h" {
 		t.Errorf("expected 2h, got %s", cfg.RefreshInterval)
 	}
-	if len(cfg.Sources) != 1 {
-		t.Fatalf("expected 1 source, got %d", len(cfg.Sources))
-	}
+	// First source should be the user-defined one
 	if cfg.Sources[0].Name != "Test" {
-		t.Errorf("expected source name Test, got %s", cfg.Sources[0].Name)
+		t.Errorf("expected first source name Test, got %s", cfg.Sources[0].Name)
+	}
+	// Default sources should be merged in
+	if len(cfg.Sources) <= 1 {
+		t.Errorf("expected default sources to be merged, got %d total", len(cfg.Sources))
 	}
 }
 
@@ -142,6 +144,32 @@ func TestGetBriefSizeCustom(t *testing.T) {
 	cfg := &Config{BriefSize: 10}
 	if got := cfg.GetBriefSize(); got != 10 {
 		t.Errorf("expected brief size 10, got %d", got)
+	}
+}
+
+func TestMergeNewSources(t *testing.T) {
+	cfg := &Config{
+		Sources: []Source{
+			{Name: "Existing", Type: "rss", URL: "https://example.com/feed", Enabled: true},
+			{Name: "Shared", Type: "rss", URL: "https://shared.com/feed", Enabled: true},
+		},
+	}
+	defaults := &Config{
+		Sources: []Source{
+			{Name: "Shared", Type: "rss", URL: "https://shared.com/feed", Enabled: true},
+			{Name: "NewSource", Type: "rss", URL: "https://new.com/feed", Enabled: true},
+		},
+	}
+	mergeNewSources(cfg, defaults)
+
+	if len(cfg.Sources) != 3 {
+		t.Fatalf("expected 3 sources after merge, got %d", len(cfg.Sources))
+	}
+	if cfg.Sources[0].Name != "Existing" {
+		t.Errorf("expected first source Existing, got %s", cfg.Sources[0].Name)
+	}
+	if cfg.Sources[2].Name != "NewSource" {
+		t.Errorf("expected NewSource appended, got %s", cfg.Sources[2].Name)
 	}
 }
 
