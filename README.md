@@ -41,7 +41,7 @@ A terminal dashboard that aggregates engineering blog posts from top tech compan
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew install matheuskafuri/devnews/devnews
+brew install matheuskafuri/devnews
 ```
 
 ### Go
