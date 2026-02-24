@@ -1,0 +1,4 @@
+devnews
+dist/
+*.db
+.DS_Store

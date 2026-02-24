@@ -1,0 +1,34 @@
+refresh_interval: 1h
+sources:
+  - name: Cloudflare
+    type: rss
+    url: https://blog.cloudflare.com/rss
+    enabled: true
+  - name: GitHub
+    type: rss
+    url: https://github.blog/engineering/feed/
+    enabled: true
+  - name: Stripe
+    type: rss
+    url: https://stripe.com/blog/feed.rss
+    enabled: true
+  - name: Netflix
+    type: rss
+    url: https://netflixtechblog.com/feed
+    enabled: true
+  - name: Uber
+    type: rss
+    url: https://eng.uber.com/feed/
+    enabled: true
+  - name: LinkedIn
+    type: rss
+    url: https://engineering.linkedin.com/blog.rss.html
+    enabled: true
+  - name: Slack
+    type: rss
+    url: https://slack.engineering/feed/
+    enabled: true
+  - name: Dropbox
+    type: rss
+    url: https://dropbox.tech/feed
+    enabled: true

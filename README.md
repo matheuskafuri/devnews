@@ -1,0 +1,218 @@
+# devnews
+
+A terminal dashboard that aggregates engineering blog posts from top tech companies via RSS. Run `devnews` and browse the latest posts from Cloudflare, GitHub, Stripe, Netflix and more — without leaving your terminal.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  devnews — Engineering Blog Aggregator           Feb 23    │
+├─────────────────────────────────────────────────────────────┤
+│ [All] [Cloudflare] [GitHub] [Stripe] [Netflix] ...         │
+├──────────────────────┬──────────────────────────────────────┤
+│                      │                                      │
+│ > Building DNS       │  Building DNS in Rust                │
+│   Cloudflare · 2h    │                                      │
+│                      │  We recently rewrote our DNS proxy   │
+│   Scaling Idempot... │  in Rust for improved performance... │
+│   Stripe · 5h        │                                      │
+│                      │  Read more: https://blog.cloud...    │
+│   JVM Tuning at...   │                                      │
+│   Netflix · 1d       │                                      │
+│                      │                                      │
+├──────────────────────┴──────────────────────────────────────┤
+│  12 articles · Cloudflare    ↑↓ navigate  o open  / search │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Features
+
+- **Two-pane layout** — article list + preview side by side
+- **Source filtering** — toggle sources on/off with a tab bar
+- **Search** — filter articles by title or description
+- **SQLite cache** — instant startup after first fetch
+- **Adaptive colors** — looks good in both dark and light terminals
+- **Open in browser** — press `o` to read the full article
+- **Zero config** — works out of the box, customizable via YAML
+
+## Install
+
+### Homebrew (macOS/Linux)
+
+```bash
+brew install matheuskafuri/tap/devnews
+```
+
+### Go
+
+Requires Go 1.21+:
+
+```bash
+go install github.com/matheuskafuri/devnews@latest
+```
+
+### Binary download
+
+Download pre-built binaries for your platform from [GitHub Releases](https://github.com/matheuskafuri/devnews/releases). Available for Linux, macOS, and Windows on both amd64 and arm64.
+
+```bash
+# Example for macOS arm64
+tar -xzf devnews_*_darwin_arm64.tar.gz
+sudo mv devnews /usr/local/bin/
+```
+
+### Build from source
+
+```bash
+git clone https://github.com/matheuskafuri/devnews.git
+cd devnews
+make build
+./devnews
+```
+
+## Usage
+
+```bash
+devnews                          # launch TUI
+devnews --since 7d               # only show articles from last 7 days
+devnews --since 24h              # only show articles from last 24 hours
+devnews --refresh                # force refresh feeds before launching
+devnews --config path/to/file    # use a custom config file
+devnews version                  # print version info
+```
+
+On first run, devnews fetches all configured feeds and caches them locally in SQLite. Subsequent launches load from cache instantly and only re-fetch when the refresh interval has elapsed (default: 1 hour).
+
+## Keybindings
+
+### Navigation
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` or `↑` / `↓` | Move up/down in article list |
+| `tab` | Switch focus between list and preview panes |
+| `j` / `k` (in preview) | Scroll preview content |
+
+### Actions
+
+| Key | Action |
+|-----|--------|
+| `o` or `enter` | Open selected article in your default browser |
+| `r` | Refresh all feeds |
+| `/` | Enter search mode — filter by title or description |
+| `f` | Enter filter mode — toggle sources on/off |
+
+### Filter mode
+
+| Key | Action |
+|-----|--------|
+| `←` / `→` or `h` / `l` | Move between sources |
+| `space` or `enter` | Toggle selected source |
+| `1`-`9` | Toggle source by number |
+| `esc` or `f` | Exit filter mode |
+
+### General
+
+| Key | Action |
+|-----|--------|
+| `?` | Toggle help overlay |
+| `esc` | Exit search/filter mode |
+| `q` or `ctrl+c` | Quit |
+
+## Configuration
+
+On first run, a default config is written to `~/.config/devnews/config.yaml` (follows [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) on all platforms).
+
+```yaml
+refresh_interval: 1h
+sources:
+  - name: Cloudflare
+    type: rss
+    url: https://blog.cloudflare.com/rss
+    enabled: true
+  - name: GitHub
+    type: rss
+    url: https://github.blog/engineering/feed/
+    enabled: true
+  - name: Stripe
+    type: rss
+    url: https://stripe.com/blog/feed.rss
+    enabled: true
+  - name: Netflix
+    type: rss
+    url: https://netflixtechblog.com/feed
+    enabled: true
+```
+
+### Adding your own sources
+
+Add any RSS or Atom feed to the `sources` list:
+
+```yaml
+sources:
+  # ... existing sources ...
+  - name: My Company
+    type: rss
+    url: https://engineering.mycompany.com/feed.xml
+    enabled: true
+```
+
+### Disabling a source
+
+Set `enabled: false` to hide a source without removing it:
+
+```yaml
+  - name: Stripe
+    type: rss
+    url: https://stripe.com/blog/feed.rss
+    enabled: false
+```
+
+### Changing refresh interval
+
+```yaml
+refresh_interval: 30m   # fetch new articles every 30 minutes
+```
+
+## Default sources
+
+| Source | URL |
+|--------|-----|
+| Cloudflare | https://blog.cloudflare.com/rss |
+| GitHub | https://github.blog/engineering/feed/ |
+| Stripe | https://stripe.com/blog/feed.rss |
+| Netflix | https://netflixtechblog.com/feed |
+| Uber | https://eng.uber.com/feed/ |
+| LinkedIn | https://engineering.linkedin.com/blog.rss.html |
+| Slack | https://slack.engineering/feed/ |
+| Dropbox | https://dropbox.tech/feed |
+
+## How it works
+
+1. **Fetch** — devnews concurrently fetches RSS/Atom feeds from all enabled sources
+2. **Cache** — articles are stored in a local SQLite database at `~/.cache/devnews/devnews.db`
+3. **Display** — a bubbletea TUI renders a two-pane interface with list + preview
+4. **Refresh** — feeds are re-fetched when the configured interval has elapsed, or on demand with `r` or `--refresh`
+
+No CGo required — the SQLite driver is pure Go (`modernc.org/sqlite`), so the binary is fully self-contained and works on any platform without external dependencies.
+
+## Development
+
+```bash
+# Build
+make build
+
+# Run
+make run
+
+# Test
+make test
+
+# Lint (requires golangci-lint)
+make lint
+
+# Clean
+make clean
+```
+
+## License
+
+[MIT](LICENSE)
