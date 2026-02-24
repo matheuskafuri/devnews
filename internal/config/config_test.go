@@ -147,27 +147,36 @@ func TestGetBriefSizeCustom(t *testing.T) {
 	}
 }
 
-func TestMergeNewSources(t *testing.T) {
+func TestMergeDefaultSources(t *testing.T) {
 	cfg := &Config{
 		Sources: []Source{
 			{Name: "Existing", Type: "rss", URL: "https://example.com/feed", Enabled: true},
-			{Name: "Shared", Type: "rss", URL: "https://shared.com/feed", Enabled: true},
+			{Name: "Shared", Type: "rss", URL: "https://old.com/feed", Enabled: true},
 		},
 	}
 	defaults := &Config{
 		Sources: []Source{
-			{Name: "Shared", Type: "rss", URL: "https://shared.com/feed", Enabled: true},
-			{Name: "NewSource", Type: "rss", URL: "https://new.com/feed", Enabled: true},
+			{Name: "Shared", Type: "atom", URL: "https://new.com/feed", Enabled: true},
+			{Name: "NewSource", Type: "rss", URL: "https://new-source.com/feed", Enabled: true},
 		},
 	}
-	mergeNewSources(cfg, defaults)
+	mergeDefaultSources(cfg, defaults)
 
 	if len(cfg.Sources) != 3 {
 		t.Fatalf("expected 3 sources after merge, got %d", len(cfg.Sources))
 	}
+	// User-only source preserved
 	if cfg.Sources[0].Name != "Existing" {
 		t.Errorf("expected first source Existing, got %s", cfg.Sources[0].Name)
 	}
+	// Shared source URL updated to default
+	if cfg.Sources[1].URL != "https://new.com/feed" {
+		t.Errorf("expected Shared URL updated, got %s", cfg.Sources[1].URL)
+	}
+	if cfg.Sources[1].Type != "atom" {
+		t.Errorf("expected Shared type updated to atom, got %s", cfg.Sources[1].Type)
+	}
+	// New default source appended
 	if cfg.Sources[2].Name != "NewSource" {
 		t.Errorf("expected NewSource appended, got %s", cfg.Sources[2].Name)
 	}

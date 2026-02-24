@@ -161,14 +161,29 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
-	// Merge any new default sources the user doesn't have yet
-	mergeNewSources(&cfg, defaults)
+	// Merge new default sources and update changed URLs
+	mergeDefaultSources(&cfg, defaults)
 
 	return &cfg, nil
 }
 
-// mergeNewSources appends sources from defaults that don't exist in cfg (by name).
-func mergeNewSources(cfg *Config, defaults *Config) {
+// mergeDefaultSources adds missing default sources and updates URLs for existing
+// ones whose URL was changed in defaults (e.g. feed URL migrations).
+func mergeDefaultSources(cfg *Config, defaults *Config) {
+	defaultByName := make(map[string]Source, len(defaults.Sources))
+	for _, s := range defaults.Sources {
+		defaultByName[s.Name] = s
+	}
+
+	// Update URLs for existing sources that match a default by name
+	for i, s := range cfg.Sources {
+		if d, ok := defaultByName[s.Name]; ok && s.URL != d.URL {
+			cfg.Sources[i].URL = d.URL
+			cfg.Sources[i].Type = d.Type
+		}
+	}
+
+	// Append new sources not present in user config
 	existing := make(map[string]bool, len(cfg.Sources))
 	for _, s := range cfg.Sources {
 		existing[s.Name] = true

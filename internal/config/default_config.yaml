@@ -44,19 +44,11 @@ sources:
     enabled: true
   - name: OpenAI
     type: rss
-    url: https://openai.com/news/engineering/rss.xml
+    url: https://openai.com/blog/rss.xml
     enabled: true
   - name: PlanetScale
     type: atom
     url: https://planetscale.com/blog/feed.atom
-    enabled: true
-  - name: Uber
-    type: rss
-    url: https://www.uber.com/blog/engineering/rss/
-    enabled: true
-  - name: Shopify
-    type: atom
-    url: https://shopifyengineering.myshopify.com/blogs/engineering.atom
     enabled: true
   - name: Pragmatic Engineer
     type: rss
@@ -64,7 +56,7 @@ sources:
     enabled: true
   - name: DeepMind
     type: rss
-    url: https://deepmind.com/blog/feed/basic/
+    url: https://deepmind.google/blog/rss.xml
     enabled: true
   - name: MIT AI
     type: rss
