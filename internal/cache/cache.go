@@ -71,7 +71,6 @@ func (c *Cache) init() error {
 	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN tags TEXT NOT NULL DEFAULT ''")
 
 	// Migrate: add V2 columns
-	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN signal_score REAL NOT NULL DEFAULT 0")
 	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN category TEXT NOT NULL DEFAULT ''")
 	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN why_it_matters TEXT NOT NULL DEFAULT ''")
 

@@ -16,7 +16,6 @@ import (
 type Briefing struct {
 	// V2 fields
 	DateLabel string
-	Freshness string
 	Scanned   int
 	Selected  int
 	Themes    []string
@@ -61,7 +60,6 @@ func Generate(opts GenerateOpts) (*Briefing, error) {
 
 	b := &Briefing{
 		DateLabel: time.Now().Format("Jan 2"),
-		Freshness: "Fresh",
 		Scanned:   len(articles),
 		Focus:     opts.FocusCategory,
 	}
@@ -77,11 +75,6 @@ func Generate(opts GenerateOpts) (*Briefing, error) {
 		// Persist to cache (non-blocking, best-effort)
 		opts.DB.UpdateArticleCategory(articles[i].ID, articles[i].Category)
 	}
-
-	// Sort by published date descending (already sorted from DB, but ensure after classification)
-	sort.Slice(articles, func(i, j int) bool {
-		return articles[i].Published.After(articles[j].Published)
-	})
 
 	// Filter by focus category if set
 	if opts.FocusCategory != "" {
