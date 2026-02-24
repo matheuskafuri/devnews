@@ -3,16 +3,20 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/matheuskafuri/devnews/internal/ai"
+	"github.com/matheuskafuri/devnews/internal/briefing"
 	"github.com/matheuskafuri/devnews/internal/browser"
 	"github.com/matheuskafuri/devnews/internal/cache"
 	"github.com/matheuskafuri/devnews/internal/config"
 	"github.com/matheuskafuri/devnews/internal/feed"
+	"github.com/matheuskafuri/devnews/internal/signal"
 )
 
 type focusPane int
@@ -25,10 +29,13 @@ const (
 type mode int
 
 const (
-	modeNormal mode = iota
+	modeHome mode = iota
+	modeNormal
 	modeSearch
 	modeFilter
 	modeHelp
+	modeBriefingOpening
+	modeBriefingCard
 )
 
 type App struct {
@@ -47,37 +54,122 @@ type App struct {
 	spinner     spinner.Model
 	filterBar   filterBar
 
+	// AI
+	summarizer ai.Summarizer
+
 	// State
-	refreshing    bool
-	since         time.Time
-	previewScroll int
-	currentDate   string
-	err           error
+	refreshing         bool
+	since              time.Time
+	previewScroll      int
+	currentDate        string
+	streak             int
+	err                error
+	briefingV2          *briefing.Briefing
+	cardCursor          int
+	showSignalBreakdown bool
+	sourceWeights      signal.SourceWeights
 }
 
-func NewApp(cfg *config.Config, db *cache.Cache, since time.Time) *App {
+// RunOpts holds all parameters for launching the TUI.
+type RunOpts struct {
+	Cfg           *config.Config
+	DB            *cache.Cache
+	Since         time.Time
+	Streak        int
+	Summarizer    ai.Summarizer
+	BrowseMode    bool
+	BriefingV2    *briefing.Briefing
+	SourceWeights signal.SourceWeights
+}
+
+func NewApp(opts RunOpts) *App {
 	ti := textinput.New()
 	ti.Placeholder = "Search articles..."
 	ti.Prompt = searchPromptStyle.Render("/ ")
 	ti.CharLimit = 100
 
 	sp := spinner.New()
-	sp.Spinner = spinner.Dot
+	sp.Spinner = spinner.MiniDot
 	sp.Style = spinnerStyle
 
+	startMode := modeHome
+	if opts.BrowseMode {
+		startMode = modeNormal
+	}
+
 	return &App{
-		cfg:         cfg,
-		db:          db,
-		since:       since,
-		filterBar:   newFilterBar(cfg.SourceNames()),
-		searchInput: ti,
-		spinner:     sp,
-		currentDate: time.Now().Format("Jan 2"),
+		cfg:           opts.Cfg,
+		db:            opts.DB,
+		since:         opts.Since,
+		streak:        opts.Streak,
+		summarizer:    opts.Summarizer,
+		filterBar:     newFilterBar(opts.Cfg.SourceNames()),
+		searchInput:   ti,
+		spinner:       sp,
+		currentDate:   time.Now().Format("Jan 2"),
+		mode:          startMode,
+		briefingV2:    opts.BriefingV2,
+		sourceWeights: opts.SourceWeights,
 	}
 }
 
 func (a *App) Init() tea.Cmd {
-	return a.loadArticlesCmd()
+	var cmds []tea.Cmd
+
+	// Only load articles immediately if starting in browse mode
+	if a.mode == modeNormal {
+		cmds = append(cmds, a.loadArticlesCmd())
+	}
+
+	// Async AI enrichment for V2 briefing
+	if a.summarizer != nil && a.briefingV2 != nil {
+		cmds = append(cmds, a.fetchWhyItMatters()...)
+		cmds = append(cmds, a.fetchThemes())
+	}
+
+	return tea.Batch(cmds...)
+}
+
+func (a *App) fetchWhyItMatters() []tea.Cmd {
+	var cmds []tea.Cmd
+	s := a.summarizer
+	db := a.db
+	for i, card := range a.briefingV2.Cards {
+		if card.Article.WhyItMatters != "" && card.Article.WhyItMatters != briefing.DescriptionExcerpt(card.Article.Description) {
+			continue // already has AI-generated text
+		}
+		idx := i
+		art := card.Article
+		cmds = append(cmds, func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			text, err := s.WhyItMatters(ctx, art.Title, art.Description)
+			if err != nil || text == "" {
+				return nil
+			}
+			db.UpdateArticleWhyItMatters(art.ID, text)
+			return whyItMattersMsg{cardIndex: idx, articleID: art.ID, text: text}
+		})
+	}
+	return cmds
+}
+
+func (a *App) fetchThemes() tea.Cmd {
+	s := a.summarizer
+	cards := a.briefingV2.Cards
+	summaries := make([]ai.ArticleSummary, len(cards))
+	for i, c := range cards {
+		summaries[i] = ai.ArticleSummary{Title: c.Article.Title, Category: c.Article.Category}
+	}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		themes, err := s.Themes(ctx, summaries)
+		if err != nil || len(themes) == 0 {
+			return nil
+		}
+		return themesMsg{themes: themes}
+	}
 }
 
 // loadArticlesCmd captures current query state into the closure to avoid races.
@@ -142,7 +234,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.cursor >= len(a.articles) {
 			a.cursor = max(0, len(a.articles)-1)
 		}
-		return a, nil
+		return a, a.maybeFetchSummary()
 
 	case feedErrMsg:
 		a.err = msg.err
@@ -151,6 +243,37 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case refreshDoneMsg:
 		a.refreshing = false
 		return a, a.loadArticlesCmd()
+
+	case summaryLoadedMsg:
+		// Update the article in our local slice
+		tags := strings.Join(msg.result.Tags, ", ")
+		for i := range a.articles {
+			if a.articles[i].ID == msg.articleID {
+				a.articles[i].Summary = msg.result.Summary
+				a.articles[i].Tags = tags
+				break
+			}
+		}
+		// Persist to cache asynchronously
+		db := a.db
+		id := msg.articleID
+		summary := msg.result.Summary
+		return a, func() tea.Msg {
+			db.UpdateArticleSummary(id, summary, tags)
+			return nil
+		}
+
+	case whyItMattersMsg:
+		if a.briefingV2 != nil && msg.cardIndex < len(a.briefingV2.Cards) {
+			a.briefingV2.Cards[msg.cardIndex].Article.WhyItMatters = msg.text
+		}
+		return a, nil
+
+	case themesMsg:
+		if a.briefingV2 != nil {
+			a.briefingV2.Themes = msg.themes
+		}
+		return a, nil
 
 	case spinner.TickMsg:
 		if a.refreshing {
@@ -173,6 +296,12 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Mode-specific handling
 	switch a.mode {
+	case modeHome:
+		return a.handleHomeKey(msg)
+	case modeBriefingOpening:
+		return a.handleBriefingOpeningKey(msg)
+	case modeBriefingCard:
+		return a.handleBriefingCardKey(msg)
 	case modeSearch:
 		return a.handleSearchKey(msg)
 	case modeFilter:
@@ -192,6 +321,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.focus == focusList && a.cursor < len(a.articles)-1 {
 			a.cursor++
 			a.previewScroll = 0
+			return a, a.maybeFetchSummary()
 		} else if a.focus == focusPreview {
 			a.previewScroll++
 		}
@@ -200,6 +330,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.focus == focusList && a.cursor > 0 {
 			a.cursor--
 			a.previewScroll = 0
+			return a, a.maybeFetchSummary()
 		} else if a.focus == focusPreview && a.previewScroll > 0 {
 			a.previewScroll--
 		}
@@ -230,11 +361,84 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, tea.Batch(a.doRefresh(), a.spinner.Tick)
 		}
 		return a, nil
+	case "h":
+		a.mode = modeHome
+		return a, nil
 	case "?":
 		a.mode = modeHelp
 		return a, nil
 	}
 
+	return a, nil
+}
+
+func (a *App) handleHomeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "b", "1":
+		if a.briefingV2 != nil && len(a.briefingV2.Cards) > 0 {
+			a.mode = modeBriefingOpening
+			return a, nil
+		}
+		a.mode = modeNormal
+		return a, a.loadArticlesCmd()
+	case "e", "2":
+		a.mode = modeNormal
+		return a, a.loadArticlesCmd()
+	case "q":
+		return a, tea.Quit
+	}
+	return a, nil
+}
+
+func (a *App) handleBriefingOpeningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		a.mode = modeBriefingCard
+		a.cardCursor = 0
+		return a, nil
+	case "q":
+		return a, tea.Quit
+	case "e":
+		a.mode = modeNormal
+		return a, a.loadArticlesCmd()
+	case "h":
+		a.mode = modeHome
+		return a, nil
+	}
+	return a, nil
+}
+
+func (a *App) handleBriefingCardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "n", "j", "right":
+		if a.briefingV2 != nil && a.cardCursor < len(a.briefingV2.Cards)-1 {
+			a.cardCursor++
+			a.showSignalBreakdown = false
+		}
+		return a, nil
+	case "p", "k", "left":
+		if a.cardCursor > 0 {
+			a.cardCursor--
+			a.showSignalBreakdown = false
+		}
+		return a, nil
+	case "o", "enter":
+		if a.briefingV2 != nil && a.cardCursor < len(a.briefingV2.Cards) {
+			return a, openBrowserCmd(a.briefingV2.Cards[a.cardCursor].Article.Link)
+		}
+		return a, nil
+	case "i":
+		a.showSignalBreakdown = !a.showSignalBreakdown
+		return a, nil
+	case "e":
+		a.mode = modeNormal
+		return a, a.loadArticlesCmd()
+	case "h":
+		a.mode = modeHome
+		return a, nil
+	case "q":
+		return a, tea.Quit
+	}
 	return a, nil
 }
 
@@ -289,13 +493,42 @@ func (a *App) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+func (a *App) withBottomBar(content string, hints string) string {
+	bar := renderBottomBar(a.streak, hints, a.width)
+	lines := strings.Split(content, "\n")
+	for len(lines) < a.height-1 {
+		lines = append(lines, "")
+	}
+	if len(lines) >= a.height {
+		lines = lines[:a.height-1]
+	}
+	lines = append(lines, bar)
+	return strings.Join(lines, "\n")
+}
+
 func (a *App) View() string {
 	if a.width == 0 {
-		return "Loading..."
+		return lipgloss.NewStyle().Foreground(colorAccent).Render("  devnews")
+	}
+
+	if a.mode == modeHome {
+		hasBriefing := a.briefingV2 != nil && len(a.briefingV2.Cards) > 0
+		return a.withBottomBar(renderHomeScreen(a.width, a.height, hasBriefing), "b briefing  e browse  q quit")
+	}
+
+	if a.mode == modeBriefingOpening && a.briefingV2 != nil {
+		return a.withBottomBar(renderOpeningScreen(a.briefingV2, a.height), "enter start  e browse  h home  q quit")
+	}
+
+	if a.mode == modeBriefingCard && a.briefingV2 != nil && a.cardCursor < len(a.briefingV2.Cards) {
+		return a.withBottomBar(
+			renderCardView(a.briefingV2.Cards[a.cardCursor], len(a.briefingV2.Cards), a.width, a.height, a.showSignalBreakdown, a.sourceWeights),
+			"n next  p prev  o open  i info  e browse  h home  q quit",
+		)
 	}
 
 	if a.mode == modeHelp {
-		return a.renderHelp()
+		return a.withBottomBar(a.renderHelp(), "? close  h home  q quit")
 	}
 
 	// Layout calculations
@@ -312,7 +545,7 @@ func (a *App) View() string {
 	}
 
 	// Header
-	headerLeft := headerStyle.Render("devnews — Engineering Blog Aggregator")
+	headerLeft := headerStyle.Render("devnews")
 	headerRight := headerDateStyle.Render(a.currentDate)
 	headerGap := a.width - lipgloss.Width(headerLeft) - lipgloss.Width(headerRight)
 	if headerGap < 0 {
@@ -361,6 +594,7 @@ func (a *App) View() string {
 	status := renderStatusBar(
 		len(a.articles),
 		a.filterBar.activeLabel(),
+		a.streak,
 		a.width,
 		a.mode == modeSearch,
 		a.refreshing,
@@ -378,42 +612,60 @@ func (a *App) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, filter, content, status)
 }
 
+func (a *App) maybeFetchSummary() tea.Cmd {
+	if a.summarizer == nil {
+		return nil
+	}
+	if len(a.articles) == 0 || a.cursor >= len(a.articles) {
+		return nil
+	}
+	article := a.articles[a.cursor]
+	if article.Summary != "" {
+		return nil // already cached
+	}
+	s := a.summarizer
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		result, err := s.Summarize(ctx, article.Title, article.Description)
+		if err != nil {
+			return nil // non-fatal
+		}
+		return summaryLoadedMsg{articleID: article.ID, result: result}
+	}
+}
+
 func (a *App) renderHelp() string {
-	help := `
-  devnews — Keyboard Shortcuts
+	title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("devnews")
+	dim := helpDimStyle
 
-  Navigation
-    j/k, ↑/↓     Navigate article list
-    tab           Switch focus between list and preview
+	help := title + dim.Render(" — Keyboard Shortcuts") + "\n\n" +
+		dim.Render("Navigation") + "\n" +
+		"  j/k, ↑/↓     Navigate article list\n" +
+		"  tab           Switch focus between list and preview\n\n" +
+		dim.Render("Actions") + "\n" +
+		"  o, enter      Open article in browser\n" +
+		"  r             Refresh feeds\n" +
+		"  /             Search articles\n" +
+		"  f             Toggle source filter mode\n\n" +
+		dim.Render("Filter Mode") + "\n" +
+		"  ←/→, h/l     Move between sources\n" +
+		"  space/enter   Toggle source\n" +
+		"  1-9           Toggle source by number\n" +
+		"  esc, f        Exit filter mode\n\n" +
+		dim.Render("General") + "\n" +
+		"  h             Go to home screen\n" +
+		"  ?             Toggle this help\n" +
+		"  q, ctrl+c    Quit"
 
-  Actions
-    o, enter      Open article in browser
-    r             Refresh feeds
-    /             Search articles
-    f             Toggle source filter mode
+	card := helpCardStyle.Render(help)
 
-  Filter Mode
-    ←/→, h/l     Move between sources
-    space/enter   Toggle source
-    1-9           Toggle source by number
-    esc, f        Exit filter mode
-
-  General
-    ?             Toggle this help
-    q, ctrl+c    Quit
-`
-	style := lipgloss.NewStyle().
-		Width(a.width).
-		Height(a.height).
-		Align(lipgloss.Center, lipgloss.Center).
-		Foreground(colorSecondary)
-
-	return style.Render(help)
+	return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center, card)
 }
 
 // Run starts the TUI application.
-func Run(cfg *config.Config, db *cache.Cache, since time.Time) error {
-	app := NewApp(cfg, db, since)
+func Run(opts RunOpts) error {
+	app := NewApp(opts)
 	p := tea.NewProgram(app, tea.WithAltScreen())
 	_, err := p.Run()
 	return err

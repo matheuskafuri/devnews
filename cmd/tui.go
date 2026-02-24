@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/matheuskafuri/devnews/internal/ai"
+	"github.com/matheuskafuri/devnews/internal/briefing"
 	"github.com/matheuskafuri/devnews/internal/cache"
+	"github.com/matheuskafuri/devnews/internal/classify"
 	"github.com/matheuskafuri/devnews/internal/config"
 	"github.com/matheuskafuri/devnews/internal/feed"
 	"github.com/matheuskafuri/devnews/internal/tui"
@@ -13,6 +16,10 @@ import (
 )
 
 func runTUI(cmd *cobra.Command, args []string) error {
+	return runApp(false)
+}
+
+func runApp(browseMode bool) error {
 	cfg, err := config.Load(flagConfig)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
@@ -54,7 +61,65 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		since = time.Now().Add(-d)
 	}
 
-	return tui.Run(cfg, db, since)
+	// Update reading streak
+	streak, _ := db.UpdateStreak()
+
+	// Initialize AI summarizer (optional, non-fatal)
+	var summarizer ai.Summarizer
+	if cfg.AIEnabled() {
+		summarizer, _ = ai.New(cfg.AI, cfg.AIKey())
+	}
+
+	sourceWeights := cfg.SourceWeights()
+
+	// Generate V2 briefing (unless browse mode)
+	var briefingV2 *briefing.Briefing
+	if !browseMode {
+		// Resolve focus
+		focusCategory := ""
+		focus := flagFocus
+		if focus == "" {
+			focus = cfg.DefaultFocus
+		}
+		if focus != "" {
+			cat, err := classify.ResolveAlias(focus)
+			if err != nil {
+				return err
+			}
+			focusCategory = string(cat)
+		}
+
+		// Determine since for briefing
+		briefingSince := since
+		if briefingSince.IsZero() {
+			// Default: articles from last 24h
+			briefingSince = time.Now().Add(-24 * time.Hour)
+		}
+
+		b, err := briefing.Generate(briefing.GenerateOpts{
+			DB:            db,
+			Since:         briefingSince,
+			BriefSize:     cfg.GetBriefSize(),
+			FocusCategory: focusCategory,
+			SourceWeights: sourceWeights,
+		})
+		if err == nil {
+			briefingV2 = b
+		}
+	}
+
+	db.SetLastOpened()
+
+	return tui.Run(tui.RunOpts{
+		Cfg:           cfg,
+		DB:            db,
+		Since:         since,
+		Streak:        streak,
+		Summarizer:    summarizer,
+		BrowseMode:    browseMode,
+		BriefingV2:    briefingV2,
+		SourceWeights: sourceWeights,
+	})
 }
 
 func parseSince(s string) (time.Duration, error) {

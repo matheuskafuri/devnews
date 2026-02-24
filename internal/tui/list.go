@@ -31,12 +31,15 @@ func renderListItem(a cache.Article, selected bool, width int) string {
 
 	var title string
 	if selected {
-		title = itemSelectedStyle.Render("> " + truncateStr(a.Title, width-4))
+		title = itemSelectedStyle.Render("▸ " + truncateStr(a.Title, width-4))
 	} else {
 		title = itemTitleStyle.Render("  " + truncateStr(a.Title, width-4))
 	}
 
 	meta := "  " + itemSourceStyle.Render(a.Source) + " " + itemTimeStyle.Render("· "+relativeTime(a.Published))
+	if a.Tags != "" {
+		meta += " " + itemTimeStyle.Render("· "+a.Tags)
+	}
 
 	return title + "\n" + meta
 }

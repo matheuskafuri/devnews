@@ -50,7 +50,9 @@ func (c *Cache) init() error {
 			link        TEXT NOT NULL,
 			description TEXT NOT NULL DEFAULT '',
 			published   DATETIME NOT NULL,
-			fetched_at  DATETIME NOT NULL
+			fetched_at  DATETIME NOT NULL,
+			summary     TEXT NOT NULL DEFAULT '',
+			tags        TEXT NOT NULL DEFAULT ''
 		);
 		CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published DESC);
 		CREATE INDEX IF NOT EXISTS idx_articles_source ON articles(source);
@@ -63,6 +65,17 @@ func (c *Cache) init() error {
 	if err != nil {
 		return fmt.Errorf("initializing schema: %w", err)
 	}
+
+	// Migrate: add summary/tags columns if they don't exist
+	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN summary TEXT NOT NULL DEFAULT ''")
+	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN tags TEXT NOT NULL DEFAULT ''")
+
+	// Migrate: add V2 columns
+	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN signal_score REAL NOT NULL DEFAULT 0")
+	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN category TEXT NOT NULL DEFAULT ''")
+	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN why_it_matters TEXT NOT NULL DEFAULT ''")
+	c.writeDB.Exec("CREATE INDEX IF NOT EXISTS idx_articles_signal ON articles(signal_score DESC)")
+
 	return nil
 }
 
@@ -138,11 +151,21 @@ func (c *Cache) GetArticles(opts QueryOpts) ([]Article, error) {
 		args = append(args, term, term)
 	}
 
-	query := "SELECT id, source, title, link, description, published, fetched_at FROM articles"
+	if opts.Category != "" {
+		where = append(where, "category = ?")
+		args = append(args, opts.Category)
+	}
+
+	query := "SELECT id, source, title, link, description, published, fetched_at, summary, tags, signal_score, category, why_it_matters FROM articles"
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
-	query += " ORDER BY published DESC"
+
+	if opts.OrderBy == "signal" {
+		query += " ORDER BY signal_score DESC"
+	} else {
+		query += " ORDER BY published DESC"
+	}
 
 	limit := opts.Limit
 	if limit <= 0 {
@@ -159,7 +182,7 @@ func (c *Cache) GetArticles(opts QueryOpts) ([]Article, error) {
 	var articles []Article
 	for rows.Next() {
 		var a Article
-		if err := rows.Scan(&a.ID, &a.Source, &a.Title, &a.Link, &a.Description, &a.Published, &a.FetchedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Source, &a.Title, &a.Link, &a.Description, &a.Published, &a.FetchedAt, &a.Summary, &a.Tags, &a.SignalScore, &a.Category, &a.WhyItMatters); err != nil {
 			return nil, fmt.Errorf("scanning article: %w", err)
 		}
 		articles = append(articles, a)
@@ -216,4 +239,118 @@ func (c *Cache) SetLastRefresh() error {
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value
 	`, time.Now().Format(time.RFC3339))
 	return err
+}
+
+// UpdateArticleSummary saves a generated summary and tags for an article.
+func (c *Cache) UpdateArticleSummary(id, summary, tags string) error {
+	_, err := c.writeDB.Exec("UPDATE articles SET summary = ?, tags = ? WHERE id = ?", summary, tags, id)
+	return err
+}
+
+func (c *Cache) setMeta(key, value string) error {
+	_, err := c.writeDB.Exec(`
+		INSERT INTO meta (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, key, value)
+	return err
+}
+
+func (c *Cache) getMeta(key string) (string, error) {
+	var value string
+	err := c.readDB.QueryRow("SELECT value FROM meta WHERE key = ?", key).Scan(&value)
+	return value, err
+}
+
+// UpdateStreak updates the reading streak based on the current date.
+// Returns the current streak count.
+func (c *Cache) UpdateStreak() (int, error) {
+	today := time.Now().Format("2006-01-02")
+
+	lastDate, err := c.getMeta("last_active_date")
+	if err != nil {
+		// First launch ever
+		c.setMeta("streak_days", "1")
+		c.setMeta("last_active_date", today)
+		return 1, nil
+	}
+
+	if lastDate == today {
+		// Already counted today
+		streak, _ := c.getMeta("streak_days")
+		days := 1
+		fmt.Sscanf(streak, "%d", &days)
+		return days, nil
+	}
+
+	// Check if yesterday
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	streak := 1
+	if lastDate == yesterday {
+		old, _ := c.getMeta("streak_days")
+		fmt.Sscanf(old, "%d", &streak)
+		streak++
+	}
+
+	c.setMeta("streak_days", fmt.Sprintf("%d", streak))
+	c.setMeta("last_active_date", today)
+	return streak, nil
+}
+
+// GetLastOpened returns the last time devnews was opened.
+func (c *Cache) GetLastOpened() (time.Time, error) {
+	value, err := c.getMeta("last_opened")
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Parse(time.RFC3339, value)
+}
+
+// SetLastOpened records the current time as the last opened time.
+func (c *Cache) SetLastOpened() error {
+	return c.setMeta("last_opened", time.Now().Format(time.RFC3339))
+}
+
+// GetArticlesSince returns articles published after the given time.
+func (c *Cache) GetArticlesSince(since time.Time) ([]Article, error) {
+	rows, err := c.readDB.Query(
+		"SELECT id, source, title, link, description, published, fetched_at, summary, tags, signal_score, category, why_it_matters FROM articles WHERE published >= ? ORDER BY published DESC",
+		since,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var articles []Article
+	for rows.Next() {
+		var a Article
+		if err := rows.Scan(&a.ID, &a.Source, &a.Title, &a.Link, &a.Description, &a.Published, &a.FetchedAt, &a.Summary, &a.Tags, &a.SignalScore, &a.Category, &a.WhyItMatters); err != nil {
+			return nil, err
+		}
+		articles = append(articles, a)
+	}
+	return articles, rows.Err()
+}
+
+// UpdateArticleSignal saves the signal score and category for an article.
+func (c *Cache) UpdateArticleSignal(id string, score float64, category string) error {
+	_, err := c.writeDB.Exec("UPDATE articles SET signal_score = ?, category = ? WHERE id = ?", score, category, id)
+	return err
+}
+
+// UpdateArticleWhyItMatters saves the "why it matters" text for an article.
+func (c *Cache) UpdateArticleWhyItMatters(id, text string) error {
+	_, err := c.writeDB.Exec("UPDATE articles SET why_it_matters = ? WHERE id = ?", text, id)
+	return err
+}
+
+// GetTopArticles returns the top articles by signal score since the given time.
+func (c *Cache) GetTopArticles(since time.Time, limit int, category string) ([]Article, error) {
+	opts := QueryOpts{
+		Since:    since,
+		Category: category,
+		OrderBy:  "signal",
+		Limit:    limit,
+	}
+	return c.GetArticles(opts)
 }

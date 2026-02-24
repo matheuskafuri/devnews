@@ -261,6 +261,223 @@ func TestStats(t *testing.T) {
 	}
 }
 
+func TestStreakFirstLaunch(t *testing.T) {
+	db := testDB(t)
+	streak, err := db.UpdateStreak()
+	if err != nil {
+		t.Fatalf("UpdateStreak: %v", err)
+	}
+	if streak != 1 {
+		t.Errorf("expected streak 1 on first launch, got %d", streak)
+	}
+}
+
+func TestStreakSameDay(t *testing.T) {
+	db := testDB(t)
+	db.UpdateStreak()
+	streak, _ := db.UpdateStreak()
+	if streak != 1 {
+		t.Errorf("expected streak 1 on same day, got %d", streak)
+	}
+}
+
+func TestStreakNextDay(t *testing.T) {
+	db := testDB(t)
+	// Simulate yesterday
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	db.setMeta("last_active_date", yesterday)
+	db.setMeta("streak_days", "5")
+
+	streak, _ := db.UpdateStreak()
+	if streak != 6 {
+		t.Errorf("expected streak 6, got %d", streak)
+	}
+}
+
+func TestStreakReset(t *testing.T) {
+	db := testDB(t)
+	// Simulate 3 days ago
+	old := time.Now().AddDate(0, 0, -3).Format("2006-01-02")
+	db.setMeta("last_active_date", old)
+	db.setMeta("streak_days", "10")
+
+	streak, _ := db.UpdateStreak()
+	if streak != 1 {
+		t.Errorf("expected streak reset to 1, got %d", streak)
+	}
+}
+
+func TestLastOpened(t *testing.T) {
+	db := testDB(t)
+
+	// No last opened initially
+	_, err := db.GetLastOpened()
+	if err == nil {
+		t.Error("expected error when no last_opened set")
+	}
+
+	// Set and retrieve
+	db.SetLastOpened()
+	got, err := db.GetLastOpened()
+	if err != nil {
+		t.Fatalf("GetLastOpened: %v", err)
+	}
+	if time.Since(got) > 2*time.Second {
+		t.Errorf("last opened too old: %v", got)
+	}
+}
+
+func TestUpdateArticleSummary(t *testing.T) {
+	db := testDB(t)
+	if err := db.UpsertArticles(sampleArticles()); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	if err := db.UpdateArticleSummary("aaa", "Test summary", "rust, dns"); err != nil {
+		t.Fatalf("UpdateArticleSummary: %v", err)
+	}
+
+	articles, _ := db.GetArticles(QueryOpts{})
+	for _, a := range articles {
+		if a.ID == "aaa" {
+			if a.Summary != "Test summary" {
+				t.Errorf("expected summary 'Test summary', got %q", a.Summary)
+			}
+			if a.Tags != "rust, dns" {
+				t.Errorf("expected tags 'rust, dns', got %q", a.Tags)
+			}
+			return
+		}
+	}
+	t.Error("article aaa not found")
+}
+
+func TestGetArticlesSince(t *testing.T) {
+	db := testDB(t)
+	if err := db.UpsertArticles(sampleArticles()); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	got, err := db.GetArticlesSince(time.Now().Add(-3 * time.Hour))
+	if err != nil {
+		t.Fatalf("GetArticlesSince: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("expected 2 articles within 3h, got %d", len(got))
+	}
+}
+
+func TestUpdateArticleSignal(t *testing.T) {
+	db := testDB(t)
+	if err := db.UpsertArticles(sampleArticles()); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	if err := db.UpdateArticleSignal("aaa", 8.7, "Infrastructure"); err != nil {
+		t.Fatalf("UpdateArticleSignal: %v", err)
+	}
+
+	articles, _ := db.GetArticles(QueryOpts{})
+	for _, a := range articles {
+		if a.ID == "aaa" {
+			if a.SignalScore != 8.7 {
+				t.Errorf("expected signal score 8.7, got %.1f", a.SignalScore)
+			}
+			if a.Category != "Infrastructure" {
+				t.Errorf("expected category Infrastructure, got %q", a.Category)
+			}
+			return
+		}
+	}
+	t.Error("article aaa not found")
+}
+
+func TestUpdateArticleWhyItMatters(t *testing.T) {
+	db := testDB(t)
+	if err := db.UpsertArticles(sampleArticles()); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	if err := db.UpdateArticleWhyItMatters("bbb", "This matters because..."); err != nil {
+		t.Fatalf("UpdateArticleWhyItMatters: %v", err)
+	}
+
+	articles, _ := db.GetArticles(QueryOpts{})
+	for _, a := range articles {
+		if a.ID == "bbb" {
+			if a.WhyItMatters != "This matters because..." {
+				t.Errorf("expected why_it_matters text, got %q", a.WhyItMatters)
+			}
+			return
+		}
+	}
+	t.Error("article bbb not found")
+}
+
+func TestSignalOrdering(t *testing.T) {
+	db := testDB(t)
+	if err := db.UpsertArticles(sampleArticles()); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	// Set different signal scores
+	db.UpdateArticleSignal("aaa", 5.0, "")
+	db.UpdateArticleSignal("bbb", 9.0, "")
+	db.UpdateArticleSignal("ccc", 7.0, "")
+
+	got, err := db.GetArticles(QueryOpts{OrderBy: "signal"})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 articles, got %d", len(got))
+	}
+	if got[0].ID != "bbb" {
+		t.Errorf("expected highest signal first (bbb), got %s", got[0].ID)
+	}
+}
+
+func TestCategoryFilter(t *testing.T) {
+	db := testDB(t)
+	if err := db.UpsertArticles(sampleArticles()); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	db.UpdateArticleSignal("aaa", 8.0, "Infrastructure")
+	db.UpdateArticleSignal("bbb", 7.0, "AI/ML")
+	db.UpdateArticleSignal("ccc", 6.0, "Infrastructure")
+
+	got, err := db.GetArticles(QueryOpts{Category: "Infrastructure"})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("expected 2 Infrastructure articles, got %d", len(got))
+	}
+}
+
+func TestGetTopArticles(t *testing.T) {
+	db := testDB(t)
+	if err := db.UpsertArticles(sampleArticles()); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	db.UpdateArticleSignal("aaa", 5.0, "")
+	db.UpdateArticleSignal("bbb", 9.0, "")
+	db.UpdateArticleSignal("ccc", 7.0, "")
+
+	got, err := db.GetTopArticles(time.Now().Add(-72*time.Hour), 2, "")
+	if err != nil {
+		t.Fatalf("GetTopArticles: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("expected 2 top articles, got %d", len(got))
+	}
+	if len(got) > 0 && got[0].ID != "bbb" {
+		t.Errorf("expected bbb first, got %s", got[0].ID)
+	}
+}
+
 func TestOpenCreatesDir(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "sub", "deep", "test.db")

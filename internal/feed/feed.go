@@ -32,6 +32,7 @@ func (f *RSSFetcher) Fetch(ctx context.Context, source config.Source) ([]cache.A
 	}
 
 	now := time.Now()
+	maxAge := now.Add(-7 * 24 * time.Hour)
 	articles := make([]cache.Article, 0, len(feed.Items))
 	for _, item := range feed.Items {
 		pub := now
@@ -39,6 +40,11 @@ func (f *RSSFetcher) Fetch(ctx context.Context, source config.Source) ([]cache.A
 			pub = *item.PublishedParsed
 		} else if item.UpdatedParsed != nil {
 			pub = *item.UpdatedParsed
+		}
+
+		// Skip articles older than 7 days
+		if pub.Before(maxAge) {
+			continue
 		}
 
 		desc := item.Description

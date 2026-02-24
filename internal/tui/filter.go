@@ -56,13 +56,14 @@ func (f *filterBar) activeLabel() string {
 }
 
 func (f *filterBar) render(width int) string {
-	var tabs []string
+	sep := tabSeparatorStyle.Render(" · ")
+	var parts []string
 
 	// "All" tab
 	if len(f.active) == 0 {
-		tabs = append(tabs, tabActiveStyle.Render("All"))
+		parts = append(parts, tabActiveStyle.Render("All"))
 	} else {
-		tabs = append(tabs, tabInactiveStyle.Render("All"))
+		parts = append(parts, tabInactiveStyle.Render("All"))
 	}
 
 	for i, s := range f.sources {
@@ -74,18 +75,22 @@ func (f *filterBar) render(width int) string {
 		if f.filterMode && i == f.filterCursor {
 			label = "[" + s + "]"
 		}
-		tabs = append(tabs, style.Render(label))
+		parts = append(parts, style.Render(label))
 	}
 
-	// Build row tab by tab, stopping when we'd exceed width
+	// Build row with · separators, stopping when we'd exceed width
 	var row string
-	for _, tab := range tabs {
-		candidate := row + tab
+	for i, part := range parts {
+		candidate := row
+		if i > 0 {
+			candidate += sep
+		}
+		candidate += part
 		if lipgloss.Width(candidate) > width && row != "" {
 			break
 		}
 		row = candidate
 	}
 
-	return row
+	return " " + row
 }

@@ -16,29 +16,59 @@ import (
 var defaultConfigFS embed.FS
 
 type Source struct {
-	Name    string `yaml:"name"`
-	Type    string `yaml:"type"`
-	URL     string `yaml:"url"`
-	Enabled bool   `yaml:"enabled"`
+	Name    string  `yaml:"name"`
+	Type    string  `yaml:"type"`
+	URL     string  `yaml:"url"`
+	Enabled bool    `yaml:"enabled"`
+	Weight  float64 `yaml:"weight,omitempty"`
+}
+
+type AIConfig struct {
+	Provider string `yaml:"provider"` // "claude" or "openai"
+	APIKey   string `yaml:"api_key"`
+	Model    string `yaml:"model"`
 }
 
 type Config struct {
-	RefreshInterval string   `yaml:"refresh_interval"`
-	Retention       string   `yaml:"retention"`
-	Sources         []Source `yaml:"sources"`
+	RefreshInterval string    `yaml:"refresh_interval"`
+	Retention       string    `yaml:"retention"`
+	BriefSize       int       `yaml:"brief_size,omitempty"`
+	DefaultFocus    string    `yaml:"focus,omitempty"`
+	Sources         []Source  `yaml:"sources"`
+	AI              *AIConfig `yaml:"ai,omitempty"`
+}
+
+// AIEnabled returns true if AI is configured with a valid API key.
+func (c *Config) AIEnabled() bool {
+	if c.AI == nil {
+		return false
+	}
+	key := c.AI.APIKey
+	if key == "" {
+		key = os.Getenv("DEVNEWS_AI_KEY")
+	}
+	return key != ""
+}
+
+// AIKey returns the resolved API key (config or env var).
+func (c *Config) AIKey() string {
+	if c.AI != nil && c.AI.APIKey != "" {
+		return c.AI.APIKey
+	}
+	return os.Getenv("DEVNEWS_AI_KEY")
 }
 
 func (c *Config) RefreshDuration() time.Duration {
 	d, err := time.ParseDuration(c.RefreshInterval)
 	if err != nil {
-		return 1 * time.Hour
+		return 12 * time.Hour
 	}
 	return d
 }
 
 func (c *Config) RetentionDuration() time.Duration {
 	if c.Retention == "" {
-		return 90 * 24 * time.Hour // default: 90 days
+		return 7 * 24 * time.Hour // default: 90 days
 	}
 	// Support "Nd" day syntax
 	if len(c.Retention) > 1 && c.Retention[len(c.Retention)-1] == 'd' {
@@ -49,7 +79,7 @@ func (c *Config) RetentionDuration() time.Duration {
 	}
 	d, err := time.ParseDuration(c.Retention)
 	if err != nil {
-		return 90 * 24 * time.Hour
+		return 7 * 24 * time.Hour
 	}
 	return d
 }
@@ -70,6 +100,27 @@ func (c *Config) SourceNames() []string {
 		names = append(names, s.Name)
 	}
 	return names
+}
+
+// GetBriefSize returns the briefing size, defaulting to 5.
+func (c *Config) GetBriefSize() int {
+	if c.BriefSize <= 0 {
+		return 5
+	}
+	return c.BriefSize
+}
+
+// SourceWeights builds a map of source name → weight for signal scoring.
+func (c *Config) SourceWeights() map[string]float64 {
+	weights := make(map[string]float64)
+	for _, s := range c.Sources {
+		if s.Weight > 0 {
+			weights[s.Name] = s.Weight
+		} else {
+			weights[s.Name] = 0.5
+		}
+	}
+	return weights
 }
 
 func DefaultConfigPath() string {

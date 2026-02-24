@@ -25,6 +25,9 @@ A terminal dashboard that aggregates engineering blog posts from top tech compan
 
 ## Features
 
+- **Morning briefing** — see what's new since your last visit: post count, most active sources, trending keywords
+- **Reading streak** — tracks your daily usage streak in the status bar
+- **AI summaries** — optional one-line summaries and topic tags via Claude or OpenAI
 - **Two-pane layout** — article list + preview side by side
 - **Source filtering** — toggle sources on/off with a tab bar
 - **Search** — filter articles by title or description
@@ -38,7 +41,7 @@ A terminal dashboard that aggregates engineering blog posts from top tech compan
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew install matheuskafuri/tap/devnews
+brew install matheuskafuri/devnews/devnews
 ```
 
 ### Go
@@ -184,6 +187,28 @@ Articles older than the retention period are automatically deleted after each fe
 retention: 30d   # keep only the last 30 days of articles
 ```
 
+### AI summaries (optional)
+
+Add an `ai` block to your config to enable one-line article summaries, topic tags, and a TL;DR briefing line. This is fully optional — devnews works great without it.
+
+```yaml
+ai:
+  provider: claude          # claude | openai
+  api_key: sk-ant-...       # or set DEVNEWS_AI_KEY env var
+  model: claude-haiku-4-5-20251001  # optional, defaults to a fast model
+```
+
+You can also set the API key via environment variable instead of the config file:
+
+```bash
+export DEVNEWS_AI_KEY=sk-ant-...
+```
+
+When enabled:
+- **Article summaries** — a one-line summary appears in the preview pane (generated on selection, cached in SQLite)
+- **Topic tags** — up to 3 tags per article shown in the list and preview
+- **TL;DR briefing** — AI-generated "why it matters" summaries on briefing cards and detected themes on the opening screen
+
 ## Default sources
 
 | Source | URL |
@@ -229,6 +254,21 @@ With 8 default sources, the database typically stays under 200 KB.
 5. **Refresh** — feeds are re-fetched when the configured interval has elapsed, or on demand with `r` or `--refresh`
 
 No CGo required — the SQLite driver is pure Go (`modernc.org/sqlite`), so the binary is fully self-contained and works on any platform without external dependencies.
+
+## Morning briefing
+
+On launch, devnews shows a briefing header with:
+
+- A time-of-day greeting
+- How many new posts arrived since your last visit
+- The most active sources
+- Trending keywords (via TF-IDF) or a TL;DR line (if AI is configured)
+
+Press any key to dismiss and enter the normal two-pane view. The briefing only appears when there are new articles since your last session.
+
+## Reading streak
+
+devnews tracks a daily reading streak. Open it every day and watch your streak grow in the status bar. Skip a day and it resets to 1. No gamification beyond the counter — just a quiet number.
 
 ## Development
 

@@ -45,7 +45,7 @@ changelog:
 brews:
   - repository:
       owner: matheuskafuri
-      name: homebrew-tap
+      name: homebrew-devnews
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
       directory: Formula
     homepage: "https://github.com/matheuskafuri/devnews"

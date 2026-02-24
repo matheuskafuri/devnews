@@ -23,6 +23,22 @@ func renderPreview(article *cache.Article, width, height, scroll int) string {
 		fmt.Sprintf("%s · %s", article.Source, article.Published.Format("Jan 2, 2006")),
 	)
 
+	rule := lipgloss.NewStyle().Foreground(colorSubtle).Render(strings.Repeat("─", contentWidth))
+
+	var parts []string
+	parts = append(parts, title, source, rule)
+
+	// AI summary
+	if article.Summary != "" {
+		summary := previewSummaryStyle.Width(contentWidth).Render("░ " + article.Summary)
+		parts = append(parts, summary)
+		if article.Tags != "" {
+			tags := previewTagsStyle.Render(article.Tags)
+			parts = append(parts, tags)
+		}
+		parts = append(parts, "")
+	}
+
 	desc := article.Description
 	if desc == "" {
 		desc = "(No description available)"
@@ -31,7 +47,8 @@ func renderPreview(article *cache.Article, width, height, scroll int) string {
 	body := previewBodyStyle.Width(contentWidth).Render(wrapText(desc, contentWidth))
 	link := previewLinkStyle.Width(contentWidth).Render("Read more: " + article.Link)
 
-	content := lipgloss.JoinVertical(lipgloss.Left, title, source, "", body, "", link)
+	parts = append(parts, body, "", link)
+	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	// Apply scroll offset
 	lines := strings.Split(content, "\n")

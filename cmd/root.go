@@ -17,6 +17,7 @@ var (
 	flagSince   string
 	flagRefresh bool
 	flagConfig  string
+	flagFocus   string
 )
 
 var rootCmd = &cobra.Command{
@@ -30,10 +31,12 @@ func init() {
 	rootCmd.Flags().StringVar(&flagSince, "since", "", "only show articles from the last duration (e.g., 7d, 24h)")
 	rootCmd.Flags().BoolVar(&flagRefresh, "refresh", false, "force refresh feeds before launching")
 	rootCmd.Flags().StringVar(&flagConfig, "config", "", "path to config file")
+	rootCmd.Flags().StringVar(&flagFocus, "focus", "", "filter briefing to category (infra, ai, db, distributed, security, tools, platform)")
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(pruneCmd)
 	rootCmd.AddCommand(statsCmd)
+	rootCmd.AddCommand(browseCmd)
 }
 
 var versionCmd = &cobra.Command{

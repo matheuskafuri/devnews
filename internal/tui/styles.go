@@ -3,22 +3,18 @@ package tui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	// Adaptive colors for dark/light terminals
-	colorPrimary   = lipgloss.AdaptiveColor{Light: "#5A56E0", Dark: "#7571F9"}
-	colorSecondary = lipgloss.AdaptiveColor{Light: "#3D3D3D", Dark: "#ABABAB"}
-	colorDim       = lipgloss.AdaptiveColor{Light: "#9B9B9B", Dark: "#626262"}
-	colorAccent    = lipgloss.AdaptiveColor{Light: "#F25D94", Dark: "#F25D94"}
-	colorBorder    = lipgloss.AdaptiveColor{Light: "#DBDBDB", Dark: "#383838"}
-	colorActiveBdr = lipgloss.AdaptiveColor{Light: "#5A56E0", Dark: "#7571F9"}
-	colorTabActive = lipgloss.AdaptiveColor{Light: "#5A56E0", Dark: "#7571F9"}
-	colorTabBg     = lipgloss.AdaptiveColor{Light: "#EEEEEE", Dark: "#2A2A3E"}
-	colorStatusBg  = lipgloss.AdaptiveColor{Light: "#E8E8E8", Dark: "#16213E"}
-	colorStatusFg  = lipgloss.AdaptiveColor{Light: "#3D3D3D", Dark: "#ABABAB"}
-	colorGreen     = lipgloss.AdaptiveColor{Light: "#04B575", Dark: "#25D366"}
+	// Monochrome + cyan neon accent palette
+	colorAccent  = lipgloss.AdaptiveColor{Light: "#0097A7", Dark: "#00E5FF"}
+	colorText    = lipgloss.AdaptiveColor{Light: "#333333", Dark: "#CCCCCC"}
+	colorMuted   = lipgloss.AdaptiveColor{Light: "#666666", Dark: "#666666"}
+	colorDim     = lipgloss.AdaptiveColor{Light: "#999999", Dark: "#444444"}
+	colorSubtle  = lipgloss.AdaptiveColor{Light: "#CCCCCC", Dark: "#222222"}
+	colorSurface = lipgloss.AdaptiveColor{Light: "#F0F0F0", Dark: "#111111"}
+	colorBody    = lipgloss.AdaptiveColor{Light: "#444444", Dark: "#AAAAAA"}
 
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(colorPrimary).
+			Foreground(colorAccent).
 			PaddingLeft(1)
 
 	headerDateStyle = lipgloss.NewStyle().
@@ -26,46 +22,51 @@ var (
 			Align(lipgloss.Right)
 
 	listPaneStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorBorder)
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(colorSubtle)
 
 	listPaneActiveStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorActiveBdr)
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(colorAccent)
 
 	previewPaneStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorBorder)
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(colorSubtle)
 
 	previewPaneActiveStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorActiveBdr)
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(colorAccent)
 
 	itemTitleStyle = lipgloss.NewStyle().
-			Foreground(colorPrimary).
-			Bold(true)
+			Foreground(colorText)
 
 	itemSelectedStyle = lipgloss.NewStyle().
 				Foreground(colorAccent).
 				Bold(true)
 
 	itemSourceStyle = lipgloss.NewStyle().
-			Foreground(colorGreen)
+			Foreground(colorMuted)
 
 	itemTimeStyle = lipgloss.NewStyle().
 			Foreground(colorDim)
 
 	previewTitleStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(colorPrimary).
+				Foreground(colorAccent).
 				MarginBottom(1)
 
 	previewSourceStyle = lipgloss.NewStyle().
-				Foreground(colorGreen).
-				MarginBottom(1)
+				Foreground(colorMuted)
 
 	previewBodyStyle = lipgloss.NewStyle().
-				Foreground(colorSecondary)
+				Foreground(colorBody)
+
+	previewSummaryStyle = lipgloss.NewStyle().
+				Foreground(colorAccent).
+				Italic(true)
+
+	previewTagsStyle = lipgloss.NewStyle().
+				Foreground(colorDim)
 
 	previewLinkStyle = lipgloss.NewStyle().
 				Foreground(colorDim).
@@ -73,19 +74,18 @@ var (
 				MarginTop(1)
 
 	tabActiveStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(colorTabActive).
-			Padding(0, 1).
+			Foreground(colorAccent).
 			Bold(true)
 
 	tabInactiveStyle = lipgloss.NewStyle().
-				Foreground(colorSecondary).
-				Background(colorTabBg).
-				Padding(0, 1)
+				Foreground(colorDim)
+
+	tabSeparatorStyle = lipgloss.NewStyle().
+				Foreground(colorDim)
 
 	statusBarStyle = lipgloss.NewStyle().
-			Background(colorStatusBg).
-			Foreground(colorStatusFg).
+			Background(colorSurface).
+			Foreground(colorMuted).
 			PaddingLeft(1).
 			PaddingRight(1)
 
@@ -96,4 +96,48 @@ var (
 				Foreground(colorAccent).
 				Bold(true)
 
+	helpCardStyle = lipgloss.NewStyle().
+			Foreground(colorText).
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(colorSubtle).
+			Padding(1, 3)
+
+	helpDimStyle = lipgloss.NewStyle().
+			Foreground(colorDim)
+
+	// Briefing V2 styles — neon palette
+	briefingTitleColor = lipgloss.Color("#00FFFF")
+	briefingBodyColor  = lipgloss.Color("#E0E0E0")
+	briefingMetaColor  = lipgloss.Color("#00E5FF")
+	briefingWhyColor   = lipgloss.Color("#B0FFB0")
+	briefingV2TitleStyle = lipgloss.NewStyle().
+				Foreground(briefingTitleColor).
+				Bold(true)
+
+	briefingV2BodyStyle = lipgloss.NewStyle().
+				Foreground(briefingBodyColor)
+
+	briefingV2MetaStyle = lipgloss.NewStyle().
+				Foreground(briefingMetaColor)
+
+	briefingV2WhyStyle = lipgloss.NewStyle().
+				Foreground(briefingWhyColor)
+
+	categoryColors = map[string]lipgloss.Color{
+		"AI/ML":               lipgloss.Color("#DA70D6"),
+		"Infrastructure":      lipgloss.Color("#00FFAB"),
+		"Databases":           lipgloss.Color("#7FFF00"),
+		"Distributed Systems": lipgloss.Color("#FFD700"),
+		"Security":            lipgloss.Color("#FF6B6B"),
+		"Developer Tools":     lipgloss.Color("#87CEEB"),
+		"Platform":            lipgloss.Color("#00E5FF"),
+	}
 )
+
+func categoryStyle(cat string) lipgloss.Style {
+	color, ok := categoryColors[cat]
+	if !ok {
+		color = lipgloss.Color("#80DEEA")
+	}
+	return lipgloss.NewStyle().Foreground(color)
+}

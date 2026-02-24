@@ -28,8 +28,8 @@ func TestRefreshDuration(t *testing.T) {
 
 	cfg.RefreshInterval = "invalid"
 	d = cfg.RefreshDuration()
-	if d.Hours() != 1 {
-		t.Errorf("expected 1h default for invalid interval, got %v", d)
+	if d.Hours() != 12 {
+		t.Errorf("expected 12h default for invalid interval, got %v", d)
 	}
 }
 
@@ -41,8 +41,8 @@ func TestRetentionDuration(t *testing.T) {
 		{"90d", 90},
 		{"30d", 30},
 		{"720h", 30},
-		{"", 90},       // default
-		{"invalid", 90}, // fallback to default
+		{"", 7},       // default
+		{"invalid", 7}, // fallback to default
 	}
 	for _, tt := range tests {
 		cfg := &Config{Retention: tt.input}
@@ -128,6 +128,50 @@ func TestLoadNonexistentFallsBackToDefaults(t *testing.T) {
 	}
 	if len(cfg.Sources) == 0 {
 		t.Error("expected default sources when config doesn't exist")
+	}
+}
+
+func TestGetBriefSizeDefault(t *testing.T) {
+	cfg := &Config{}
+	if got := cfg.GetBriefSize(); got != 5 {
+		t.Errorf("expected default brief size 5, got %d", got)
+	}
+}
+
+func TestGetBriefSizeCustom(t *testing.T) {
+	cfg := &Config{BriefSize: 10}
+	if got := cfg.GetBriefSize(); got != 10 {
+		t.Errorf("expected brief size 10, got %d", got)
+	}
+}
+
+func TestSourceWeights(t *testing.T) {
+	cfg := &Config{
+		Sources: []Source{
+			{Name: "Stripe", Weight: 0.9},
+			{Name: "GitHub", Weight: 0},
+			{Name: "Netflix"},
+		},
+	}
+	weights := cfg.SourceWeights()
+	if weights["Stripe"] != 0.9 {
+		t.Errorf("expected Stripe weight 0.9, got %.1f", weights["Stripe"])
+	}
+	if weights["GitHub"] != 0.5 {
+		t.Errorf("expected GitHub default weight 0.5, got %.1f", weights["GitHub"])
+	}
+	if weights["Netflix"] != 0.5 {
+		t.Errorf("expected Netflix default weight 0.5, got %.1f", weights["Netflix"])
+	}
+}
+
+func TestDefaultConfigHasBriefSize(t *testing.T) {
+	cfg, err := loadDefaults()
+	if err != nil {
+		t.Fatalf("loadDefaults: %v", err)
+	}
+	if cfg.BriefSize != 5 {
+		t.Errorf("expected default brief_size 5, got %d", cfg.BriefSize)
 	}
 }
 
