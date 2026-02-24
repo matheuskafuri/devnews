@@ -47,7 +47,7 @@ brews:
       owner: matheuskafuri
       name: homebrew-devnews
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-      directory: Formula
+    directory: Formula
     homepage: "https://github.com/matheuskafuri/devnews"
     description: "TUI engineering blog aggregator"
     license: "MIT"
