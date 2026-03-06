@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -51,5 +52,45 @@ func Check(ctx context.Context, currentVersion string) *Result {
 		return nil
 	}
 
+	if !isNewer(latest, current) {
+		return nil
+	}
+
 	return &Result{LatestVersion: latest}
+}
+
+// isNewer returns true if latest is a higher semver than current.
+// Falls back to string inequality if parsing fails.
+func isNewer(latest, current string) bool {
+	lParts := parseSemver(latest)
+	cParts := parseSemver(current)
+	if lParts == nil || cParts == nil {
+		return latest != current
+	}
+	for i := range 3 {
+		if lParts[i] > cParts[i] {
+			return true
+		}
+		if lParts[i] < cParts[i] {
+			return false
+		}
+	}
+	return false
+}
+
+// parseSemver parses "major.minor.patch" into [3]int. Returns nil on failure.
+func parseSemver(v string) []int {
+	parts := strings.SplitN(v, ".", 3)
+	if len(parts) != 3 {
+		return nil
+	}
+	nums := make([]int, 3)
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return nil
+		}
+		nums[i] = n
+	}
+	return nums
 }
