@@ -31,9 +31,8 @@ type Briefing struct {
 
 // Card represents a single briefing card.
 type Card struct {
-	Article     cache.Article
-	Index       int
-	ReadingTime int
+	Article cache.Article
+	Index   int
 }
 
 // GenerateOpts holds options for the Generate function.
@@ -97,9 +96,8 @@ func Generate(opts GenerateOpts) (*Briefing, error) {
 	// Build cards
 	for i, a := range articles {
 		b.Cards = append(b.Cards, Card{
-			Article:     a,
-			Index:       i + 1,
-			ReadingTime: estimateReadTime(a.Description),
+			Article: a,
+			Index:   i + 1,
 		})
 	}
 
@@ -153,16 +151,6 @@ func DescriptionExcerpt(desc string) string {
 		return string(runes[:150]) + "..."
 	}
 	return desc
-}
-
-func estimateReadTime(desc string) int {
-	words := len(strings.Fields(desc))
-	// Multiply by 3 for full article estimate, divide by 200 WPM
-	minutes := (words * 3) / 200
-	if minutes < 1 {
-		minutes = 1
-	}
-	return minutes
 }
 
 func greeting(now time.Time) string {

@@ -118,26 +118,6 @@ func TestGenerateLegacyNoArticles(t *testing.T) {
 	}
 }
 
-func TestEstimateReadTime(t *testing.T) {
-	// 100 words * 3 / 200 = 1.5 → 1
-	short := estimateReadTime(nWords(100))
-	if short != 1 {
-		t.Errorf("expected 1 min for 100 words, got %d", short)
-	}
-
-	// 500 words * 3 / 200 = 7.5 → 7
-	long := estimateReadTime(nWords(500))
-	if long < 5 {
-		t.Errorf("expected >= 5 min for 500 words, got %d", long)
-	}
-
-	// Empty
-	empty := estimateReadTime("")
-	if empty != 1 {
-		t.Errorf("expected min 1 for empty, got %d", empty)
-	}
-}
-
 func TestDescriptionExcerpt(t *testing.T) {
 	got := DescriptionExcerpt("This is a complete sentence about infrastructure. And more text follows.")
 	if !strings.HasSuffix(got, ".") {
@@ -150,10 +130,4 @@ func TestDescriptionExcerpt(t *testing.T) {
 	}
 }
 
-func nWords(n int) string {
-	words := make([]string, n)
-	for i := range words {
-		words[i] = "word"
-	}
-	return strings.Join(words, " ")
-}
+

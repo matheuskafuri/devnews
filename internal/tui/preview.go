@@ -47,7 +47,8 @@ func renderPreview(article *cache.Article, width, height, scroll int) string {
 	body := previewBodyStyle.Width(contentWidth).Render(wrapText(desc, contentWidth))
 	link := previewLinkStyle.Width(contentWidth).Render("Read more: " + article.Link)
 
-	parts = append(parts, body, "", link)
+	hint := lipgloss.NewStyle().Foreground(colorDim).MarginTop(1).Render("Press Enter to open in browser")
+	parts = append(parts, body, "", link, hint)
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	// Apply scroll offset

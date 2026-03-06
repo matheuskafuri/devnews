@@ -59,10 +59,10 @@ func renderCardView(card briefing.Card, total int, width, height int) string {
 	body = append(body, briefingV2TitleStyle.Render(card.Article.Title))
 	body = append(body, "")
 
-	// Category · reading time
+	// Category · enter hint
 	catStyle := categoryStyle(card.Article.Category)
 	meta := catStyle.Render(card.Article.Category) +
-		briefingV2MetaStyle.Render(fmt.Sprintf("  ·  %d min", card.ReadingTime))
+		briefingV2MetaStyle.Render("  ·  Press Enter to read more")
 	body = append(body, meta)
 
 	// Why it matters
