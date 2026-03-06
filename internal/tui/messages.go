@@ -37,3 +37,9 @@ type updateAvailableMsg struct {
 	version string
 }
 
+type sourceRequestResultMsg struct {
+	err error
+}
+
+type clearStatusMsg struct{}
+

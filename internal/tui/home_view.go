@@ -15,7 +15,7 @@ var asciiLogo = []string{
 	`╚═════╝ ╚══════╝  ╚═══╝  ╚═╝  ╚═══╝╚══════╝ ╚══╝╚══╝ ╚══════╝`,
 }
 
-func renderHomeScreen(width, height int, hasBriefing bool, updateVersion string) string {
+func renderHomeScreen(width, height int, hasBriefing bool, updateVersion string, statusMessage string) string {
 	logoStyle := lipgloss.NewStyle().Foreground(colorAccent)
 	keyStyle := lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
 	labelStyle := lipgloss.NewStyle().Foreground(colorText)
@@ -34,8 +34,19 @@ func renderHomeScreen(width, height int, hasBriefing bool, updateVersion string)
 		lines = append(lines, "          "+keyStyle.Render("[b]")+"  "+labelStyle.Render("Today's Briefing"))
 	}
 	lines = append(lines, "          "+keyStyle.Render("[e]")+"  "+labelStyle.Render("Browse / Explore"))
+	lines = append(lines, "          "+keyStyle.Render("[s]")+"  "+labelStyle.Render("Request a Source"))
 	lines = append(lines, "")
 	lines = append(lines, "          "+keyStyle.Render("[q]")+"  "+labelStyle.Render("Quit"))
+
+	// Status message
+	if statusMessage != "" {
+		statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#50fa7b"))
+		if strings.HasPrefix(statusMessage, "Error:") {
+			statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
+		}
+		lines = append(lines, "")
+		lines = append(lines, "          "+statusStyle.Render(statusMessage))
+	}
 
 	// Update notification
 	if updateVersion != "" {

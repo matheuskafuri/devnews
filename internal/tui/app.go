@@ -36,6 +36,7 @@ const (
 	modeHelp
 	modeBriefingOpening
 	modeBriefingCard
+	modeRequestSource
 )
 
 type App struct {
@@ -56,6 +57,12 @@ type App struct {
 
 	// AI
 	summarizer ai.Summarizer
+
+	// Source request form
+	sourceNameInput textinput.Model
+	sourceURLInput  textinput.Model
+	sourceFormFocus int
+	statusMessage   string
 
 	// State
 	refreshing         bool
@@ -92,21 +99,31 @@ func NewApp(opts RunOpts) *App {
 	sp.Spinner = spinner.MiniDot
 	sp.Style = spinnerStyle
 
+	nameInput := textinput.New()
+	nameInput.Placeholder = "e.g. Hacker News"
+	nameInput.CharLimit = 100
+
+	urlInput := textinput.New()
+	urlInput.Placeholder = "e.g. https://news.ycombinator.com/rss"
+	urlInput.CharLimit = 200
+
 	startMode := modeHome
 	if opts.BrowseMode {
 		startMode = modeNormal
 	}
 
 	return &App{
-		cfg:           opts.Cfg,
-		db:            opts.DB,
-		since:         opts.Since,
-		streak:        opts.Streak,
-		summarizer:    opts.Summarizer,
-		filterBar:     newFilterBar(opts.Cfg.SourceNames()),
-		searchInput:   ti,
-		spinner:       sp,
-		currentDate:   time.Now().Format("Jan 2"),
+		cfg:            opts.Cfg,
+		db:             opts.DB,
+		since:          opts.Since,
+		streak:         opts.Streak,
+		summarizer:     opts.Summarizer,
+		filterBar:      newFilterBar(opts.Cfg.SourceNames()),
+		searchInput:    ti,
+		sourceNameInput: nameInput,
+		sourceURLInput:  urlInput,
+		spinner:        sp,
+		currentDate:    time.Now().Format("Jan 2"),
 		mode:           startMode,
 		briefingV2:     opts.BriefingV2,
 		currentVersion: opts.CurrentVersion,
@@ -293,6 +310,21 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.updateVersion = msg.version
 		return a, nil
 
+	case sourceRequestResultMsg:
+		if msg.err != nil {
+			a.statusMessage = "Error: " + msg.err.Error()
+		} else {
+			a.statusMessage = "Source request submitted!"
+		}
+		a.mode = modeHome
+		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+			return clearStatusMsg{}
+		})
+
+	case clearStatusMsg:
+		a.statusMessage = ""
+		return a, nil
+
 	case spinner.TickMsg:
 		if a.refreshing {
 			var cmd tea.Cmd
@@ -320,6 +352,8 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.handleBriefingOpeningKey(msg)
 	case modeBriefingCard:
 		return a.handleBriefingCardKey(msg)
+	case modeRequestSource:
+		return a.handleRequestSourceKey(msg)
 	case modeSearch:
 		return a.handleSearchKey(msg)
 	case modeFilter:
@@ -402,6 +436,14 @@ func (a *App) handleHomeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "e", "2":
 		a.mode = modeNormal
 		return a, a.loadArticlesCmd()
+	case "s":
+		a.mode = modeRequestSource
+		a.sourceNameInput.SetValue("")
+		a.sourceURLInput.SetValue("")
+		a.sourceFormFocus = 0
+		a.sourceNameInput.Focus()
+		a.sourceURLInput.Blur()
+		return a, textinput.Blink
 	case "q":
 		return a, tea.Quit
 	}
@@ -522,9 +564,15 @@ func (a *App) View() string {
 		return lipgloss.NewStyle().Foreground(colorAccent).Render("  devnews")
 	}
 
-	if a.mode == modeHome {
+	if a.mode == modeHome || a.mode == modeRequestSource {
 		hasBriefing := a.briefingV2 != nil && len(a.briefingV2.Cards) > 0
-		return a.withBottomBar(renderHomeScreen(a.width, a.height, hasBriefing, a.updateVersion), "b briefing  e browse  q quit")
+		bg := renderHomeScreen(a.width, a.height, hasBriefing, a.updateVersion, a.statusMessage)
+		if a.mode == modeRequestSource {
+			overlay := a.renderRequestSourceOverlay()
+			bg = overlayCenter(bg, overlay, a.width, a.height)
+			return a.withBottomBar(bg, "tab switch  enter submit  esc cancel")
+		}
+		return a.withBottomBar(bg, "b briefing  e browse  s request source  q quit")
 	}
 
 	if a.mode == modeBriefingOpening && a.briefingV2 != nil {
