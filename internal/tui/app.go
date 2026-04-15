@@ -54,8 +54,9 @@ type App struct {
 	cfg      *config.Config
 	db       *cache.Cache
 	articles []cache.Article
-	cursor   int
-	focus    focusPane
+	cursor      int
+	savedCursor int
+	focus       focusPane
 	layout   layout
 	mode     mode
 
@@ -428,6 +429,10 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Normal mode
 	switch msg.String() {
+	case "esc":
+		a.savedCursor = a.cursor
+		a.mode = modeHome
+		return a, nil
 	case "q":
 		return a, tea.Quit
 	case "j", "down":
@@ -483,6 +488,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 	case "h":
+		a.savedCursor = a.cursor
 		a.mode = modeHome
 		return a, nil
 	case "?":
@@ -539,6 +545,7 @@ func (a *App) handleHomeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, a.loadArticlesCmd()
 	case "e", "2":
 		a.mode = modeNormal
+		a.cursor = a.savedCursor
 		return a, a.loadArticlesCmd()
 	case "s":
 		a.mode = modeRequestSource
@@ -556,6 +563,9 @@ func (a *App) handleHomeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (a *App) handleBriefingOpeningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "esc":
+		a.mode = modeHome
+		return a, nil
 	case "enter":
 		a.mode = modeBriefingCard
 		a.cardCursor = 0
@@ -574,6 +584,9 @@ func (a *App) handleBriefingOpeningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (a *App) handleBriefingCardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "esc":
+		a.mode = modeBriefingOpening
+		return a, nil
 	case "n", "j", "right":
 		if a.briefingV2 != nil && a.cardCursor < len(a.briefingV2.Cards)-1 {
 			a.cardCursor++
@@ -663,6 +676,35 @@ func (a *App) withBottomBar(content string, hints string) string {
 	return strings.Join(lines, "\n")
 }
 
+func (a *App) breadcrumb() string {
+	dim := lipgloss.NewStyle().Foreground(colorDim)
+	accent := lipgloss.NewStyle().Foreground(colorAccent)
+	sep := dim.Render(" › ")
+
+	switch a.mode {
+	case modeHome:
+		return accent.Render("Home")
+	case modeNormal, modeSearch, modeFilter, modeAPIKeyInput, modeThemePicker:
+		bc := accent.Render("Home") + sep + accent.Render("Browse")
+		if a.mode == modeSearch {
+			bc += sep + dim.Render("Search")
+		} else if a.mode == modeFilter {
+			bc += sep + dim.Render("Filter")
+		}
+		return bc
+	case modeBriefingOpening:
+		return accent.Render("Home") + sep + accent.Render("Briefing")
+	case modeBriefingCard:
+		card := fmt.Sprintf("Card %d/%d", a.cardCursor+1, len(a.briefingV2.Cards))
+		return accent.Render("Home") + sep + accent.Render("Briefing") + sep + dim.Render(card)
+	case modeRequestSource:
+		return accent.Render("Home") + sep + dim.Render("Request Source")
+	case modeHelp:
+		return accent.Render("Home") + sep + dim.Render("Help")
+	}
+	return ""
+}
+
 func (a *App) View() string {
 	if a.width == 0 {
 		return lipgloss.NewStyle().Foreground(colorAccent).Render("  devnews")
@@ -706,12 +748,14 @@ func (a *App) View() string {
 
 	// Header
 	headerLeft := headerStyle.Render("devnews")
+	bc := a.breadcrumb()
 	headerRight := headerDateStyle.Render(a.currentDate)
-	headerGap := a.width - lipgloss.Width(headerLeft) - lipgloss.Width(headerRight)
+	headerGap := a.width - lipgloss.Width(headerLeft) - lipgloss.Width(bc) - lipgloss.Width(headerRight)
 	if headerGap < 0 {
 		headerGap = 0
 	}
-	header := headerLeft + fmt.Sprintf("%*s", headerGap, "") + headerRight
+	// Put breadcrumb after title with a small gap, date on the right
+	header := headerLeft + "  " + bc + fmt.Sprintf("%*s", headerGap, "") + headerRight
 
 	// Filter bar
 	filter := a.filterBar.render(a.width)
