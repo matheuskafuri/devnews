@@ -31,6 +31,7 @@ type Summarizer interface {
 	Brief(ctx context.Context, titles []string) (string, error)
 	WhyItMatters(ctx context.Context, title, description string) (string, error)
 	Themes(ctx context.Context, articles []ArticleSummary) ([]string, error)
+	SummarizeArticle(ctx context.Context, title, articleText string) (string, error)
 }
 
 // New creates a Summarizer from the given AI config.
@@ -85,6 +86,15 @@ Articles:
 %s
 
 Respond with one theme per line. No bullets, numbers, or other formatting.`
+
+const articleSummaryPrompt = `You are a technical content summarizer. Given the title and full text of an engineering blog post, write a clear and concise summary in 3-5 sentences. Focus on: what was built or changed, why it matters, and key technical details. Be precise and analytical. No hype.
+
+Title: %s
+
+Article text:
+%s
+
+Respond with ONLY the summary text, nothing else.`
 
 func parseSummaryResponse(text string) Result {
 	var r Result
@@ -214,6 +224,15 @@ func (c *claudeProvider) Themes(ctx context.Context, articles []ArticleSummary) 
 	return parseThemes(text), nil
 }
 
+func (c *claudeProvider) SummarizeArticle(ctx context.Context, title, articleText string) (string, error) {
+	prompt := fmt.Sprintf(articleSummaryPrompt, title, articleText)
+	text, err := c.call(ctx, prompt)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(text), nil
+}
+
 func (c *claudeProvider) call(ctx context.Context, prompt string) (string, error) {
 	body, _ := json.Marshal(claudeRequest{
 		Model:     c.model,
@@ -306,6 +325,15 @@ func (o *openaiProvider) Themes(ctx context.Context, articles []ArticleSummary) 
 		return nil, err
 	}
 	return parseThemes(text), nil
+}
+
+func (o *openaiProvider) SummarizeArticle(ctx context.Context, title, articleText string) (string, error) {
+	prompt := fmt.Sprintf(articleSummaryPrompt, title, articleText)
+	text, err := o.call(ctx, prompt)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(text), nil
 }
 
 func (o *openaiProvider) call(ctx context.Context, prompt string) (string, error) {
