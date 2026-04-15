@@ -18,63 +18,104 @@ func renderPreview(article *cache.Article, width, height, scroll int, loadingSum
 		contentWidth = 10
 	}
 
+	rule := previewRuleStyle.Render(strings.Repeat("─", contentWidth))
+
+	// Header section
 	title := previewTitleStyle.Width(contentWidth).Render(article.Title)
 	source := previewSourceStyle.Render(
 		fmt.Sprintf("%s · %s", article.Source, article.Published.Format("Jan 2, 2006")),
 	)
 
-	rule := previewRuleStyle.Render(strings.Repeat("─", contentWidth))
-
 	var parts []string
-	parts = append(parts, title, source, rule)
+	parts = append(parts, title, source)
 
-	// AI summary
-	if article.Summary != "" {
-		summary := previewSummaryStyle.Width(contentWidth).Render("░ " + article.Summary)
-		parts = append(parts, summary)
+	// Category (colored)
+	if article.Category != "" {
+		cat := categoryStyle(article.Category).Render(article.Category)
+		parts = append(parts, cat)
+	}
+
+	parts = append(parts, rule)
+
+	// AI Summary section
+	if article.FullSummary != "" {
+		sectionHeader := fullSummaryLabelStyle.Width(contentWidth).Render("░ AI Summary")
+		body := fullSummaryStyle.Width(contentWidth).Render(wrapText(article.FullSummary, contentWidth))
+		parts = append(parts, "", sectionHeader, body, "", rule)
+	} else if article.Summary != "" {
+		sectionHeader := fullSummaryLabelStyle.Width(contentWidth).Render("░ Summary")
+		summary := fullSummaryStyle.Width(contentWidth).Render(wrapText(article.Summary, contentWidth))
+		parts = append(parts, "", sectionHeader, summary)
 		if article.Tags != "" {
 			tags := previewTagsStyle.Render(article.Tags)
 			parts = append(parts, tags)
 		}
-		parts = append(parts, "")
-	}
-
-	// Full AI article summary
-	if article.FullSummary != "" {
-		label := fullSummaryLabelStyle.Width(contentWidth).Render("AI Summary")
-		body := fullSummaryStyle.Width(contentWidth).Render(wrapText(article.FullSummary, contentWidth))
-		parts = append(parts, "", label, body)
+		parts = append(parts, "", rule)
 	}
 
 	// Loading indicator
 	if loadingSummary && article.FullSummary == "" {
-		loading := fullSummaryLabelStyle.Width(contentWidth).Render("Generating AI summary...")
-		parts = append(parts, "", loading)
+		loading := fullSummaryLabelStyle.Width(contentWidth).Render("░░░▒▒▒▓▓▓ Generating summary...")
+		parts = append(parts, "", loading, "")
 	}
 
+	// Description section
 	desc := article.Description
 	if desc == "" {
 		desc = "(No description available)"
 	}
-
+	descHeader := previewSourceStyle.Render("Description")
 	body := previewBodyStyle.Width(contentWidth).Render(wrapText(desc, contentWidth))
-	link := previewLinkStyle.Width(contentWidth).Render("Read more: " + article.Link)
+	parts = append(parts, "", descHeader, body)
 
-	hint := previewHintStyle.Render("Press Enter to open in browser")
-	parts = append(parts, body, "", link, hint)
+	// Link
+	link := previewLinkStyle.Width(contentWidth).Render("Read more: " + article.Link)
+	parts = append(parts, "", link)
+
+	// Bottom rule + hints
+	parts = append(parts, rule)
+	hint := previewHintStyle.Render("S summarize  o open  v layout")
+	parts = append(parts, hint)
+
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	// Apply scroll offset
 	lines := strings.Split(content, "\n")
+	totalLines := len(lines)
+
 	if scroll > 0 && scroll < len(lines) {
 		lines = lines[scroll:]
 	}
 
-	// Pad to fill height
+	// Pad or truncate to fill height
 	if len(lines) < height {
 		lines = append(lines, make([]string, height-len(lines))...)
 	} else if len(lines) > height {
 		lines = lines[:height]
+	}
+
+	// Scroll indicators
+	if scroll > 0 {
+		// Show ▲ indicator at top-right
+		if len(lines) > 0 {
+			indicator := previewRuleStyle.Render("▲ more")
+			pad := contentWidth - lipgloss.Width(indicator)
+			if pad < 0 {
+				pad = 0
+			}
+			lines[0] = strings.Repeat(" ", pad) + indicator
+		}
+	}
+	if totalLines > scroll+height {
+		// Show ▼ indicator at bottom-right
+		if len(lines) > 0 {
+			indicator := previewRuleStyle.Render("▼ more")
+			pad := contentWidth - lipgloss.Width(indicator)
+			if pad < 0 {
+				pad = 0
+			}
+			lines[len(lines)-1] = strings.Repeat(" ", pad) + indicator
+		}
 	}
 
 	return strings.Join(lines, "\n")
