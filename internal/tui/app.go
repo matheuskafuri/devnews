@@ -16,6 +16,7 @@ import (
 	"github.com/matheuskafuri/devnews/internal/cache"
 	"github.com/matheuskafuri/devnews/internal/config"
 	"github.com/matheuskafuri/devnews/internal/feed"
+	"github.com/matheuskafuri/devnews/internal/scrape"
 	"github.com/matheuskafuri/devnews/internal/update"
 )
 
@@ -37,6 +38,7 @@ const (
 	modeBriefingOpening
 	modeBriefingCard
 	modeRequestSource
+	modeAPIKeyInput
 )
 
 type App struct {
@@ -63,6 +65,10 @@ type App struct {
 	sourceURLInput  textinput.Model
 	sourceFormFocus int
 	statusMessage   string
+
+	// API key input
+	apiKeyInput    textinput.Model
+	pendingSummary bool // true if we should trigger summary after key is saved
 
 	// State
 	refreshing         bool
@@ -107,6 +113,11 @@ func NewApp(opts RunOpts) *App {
 	urlInput.Placeholder = "e.g. https://news.ycombinator.com/rss"
 	urlInput.CharLimit = 200
 
+	apiKeyTI := textinput.New()
+	apiKeyTI.Placeholder = "sk-..."
+	apiKeyTI.CharLimit = 200
+	apiKeyTI.EchoMode = textinput.EchoPassword
+
 	startMode := modeHome
 	if opts.BrowseMode {
 		startMode = modeNormal
@@ -122,6 +133,7 @@ func NewApp(opts RunOpts) *App {
 		searchInput:    ti,
 		sourceNameInput: nameInput,
 		sourceURLInput:  urlInput,
+		apiKeyInput:    apiKeyTI,
 		spinner:        sp,
 		currentDate:    time.Now().Format("Jan 2"),
 		mode:           startMode,
@@ -294,6 +306,28 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return nil
 		}
 
+	case fullSummaryLoadedMsg:
+		for i := range a.articles {
+			if a.articles[i].ID == msg.articleID {
+				a.articles[i].FullSummary = msg.fullSummary
+				break
+			}
+		}
+		db := a.db
+		id := msg.articleID
+		summary := msg.fullSummary
+		return a, func() tea.Msg {
+			db.UpdateArticleFullSummary(id, summary)
+			return nil
+		}
+
+	case fullSummaryErrMsg:
+		a.err = fmt.Errorf("summary: %w", msg.err)
+		return a, nil
+
+	case apiKeySavedMsg:
+		return a.handleAPIKeySaved(msg.apiKey)
+
 	case whyItMattersMsg:
 		if a.briefingV2 != nil && msg.cardIndex < len(a.briefingV2.Cards) {
 			a.briefingV2.Cards[msg.cardIndex].Article.WhyItMatters = msg.text
@@ -354,6 +388,8 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.handleBriefingCardKey(msg)
 	case modeRequestSource:
 		return a.handleRequestSourceKey(msg)
+	case modeAPIKeyInput:
+		return a.handleAPIKeyInputKey(msg)
 	case modeSearch:
 		return a.handleSearchKey(msg)
 	case modeFilter:
@@ -419,6 +455,21 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "?":
 		a.mode = modeHelp
 		return a, nil
+	case "S":
+		if len(a.articles) == 0 || a.cursor >= len(a.articles) {
+			return a, nil
+		}
+		if a.articles[a.cursor].FullSummary != "" {
+			return a, nil
+		}
+		if a.summarizer == nil {
+			a.mode = modeAPIKeyInput
+			a.apiKeyInput.SetValue("")
+			a.apiKeyInput.Focus()
+			a.pendingSummary = true
+			return a, textinput.Blink
+		}
+		return a, a.fetchFullSummary()
 	}
 
 	return a, nil
@@ -676,7 +727,41 @@ func (a *App) View() string {
 		view = overlayCenter(view, overlay, a.width, a.height)
 	}
 
+	if a.mode == modeAPIKeyInput {
+		overlay := a.renderAPIKeyOverlay()
+		view = overlayCenter(view, overlay, a.width, a.height)
+	}
+
 	return view
+}
+
+func (a *App) fetchFullSummary() tea.Cmd {
+	if a.summarizer == nil || len(a.articles) == 0 || a.cursor >= len(a.articles) {
+		return nil
+	}
+	article := a.articles[a.cursor]
+	if article.FullSummary != "" {
+		return nil
+	}
+	s := a.summarizer
+	link := article.Link
+	title := article.Title
+	id := article.ID
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		text, err := scrape.Fetch(link)
+		if err != nil {
+			return fullSummaryErrMsg{articleID: id, err: err}
+		}
+
+		summary, err := s.SummarizeArticle(ctx, title, text)
+		if err != nil {
+			return fullSummaryErrMsg{articleID: id, err: err}
+		}
+		return fullSummaryLoadedMsg{articleID: id, fullSummary: summary}
+	}
 }
 
 func (a *App) maybeFetchSummary() tea.Cmd {
