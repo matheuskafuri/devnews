@@ -44,6 +44,17 @@ var (
 				Foreground(colorAccent).
 				Bold(true)
 
+	itemUnreadStyle = lipgloss.NewStyle().
+			Foreground(colorAccent).
+			Bold(true)
+
+	itemReadStyle = lipgloss.NewStyle().
+			Foreground(colorDim)
+
+	itemAIMarkerStyle = lipgloss.NewStyle().
+				Foreground(colorAccent).
+				Bold(true)
+
 	itemSourceStyle = lipgloss.NewStyle().
 			Foreground(colorMuted)
 
