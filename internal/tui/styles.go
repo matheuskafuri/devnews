@@ -73,6 +73,14 @@ var (
 				Italic(true).
 				MarginTop(1)
 
+	fullSummaryLabelStyle = lipgloss.NewStyle().
+				Foreground(colorAccent).
+				Bold(true)
+
+	fullSummaryStyle = lipgloss.NewStyle().
+				Foreground(colorBody).
+				Italic(true)
+
 	statusBarStyle = lipgloss.NewStyle().
 			Background(colorSurface).
 			Foreground(colorMuted).

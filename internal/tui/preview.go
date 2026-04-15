@@ -8,7 +8,7 @@ import (
 	"github.com/matheuskafuri/devnews/internal/cache"
 )
 
-func renderPreview(article *cache.Article, width, height, scroll int) string {
+func renderPreview(article *cache.Article, width, height, scroll int, loadingSummary bool) string {
 	if article == nil {
 		return lipglossCenter("Select an article", width, height)
 	}
@@ -37,6 +37,19 @@ func renderPreview(article *cache.Article, width, height, scroll int) string {
 			parts = append(parts, tags)
 		}
 		parts = append(parts, "")
+	}
+
+	// Full AI article summary
+	if article.FullSummary != "" {
+		label := fullSummaryLabelStyle.Width(contentWidth).Render("AI Summary")
+		body := fullSummaryStyle.Width(contentWidth).Render(wrapText(article.FullSummary, contentWidth))
+		parts = append(parts, "", label, body)
+	}
+
+	// Loading indicator
+	if loadingSummary && article.FullSummary == "" {
+		loading := fullSummaryLabelStyle.Width(contentWidth).Render("Generating AI summary...")
+		parts = append(parts, "", loading)
 	}
 
 	desc := article.Description

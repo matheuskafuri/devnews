@@ -70,6 +70,8 @@ type App struct {
 	apiKeyInput    textinput.Model
 	pendingSummary bool // true if we should trigger summary after key is saved
 
+	summaryLoading map[string]bool // article IDs currently being summarized
+
 	// State
 	refreshing         bool
 	since              time.Time
@@ -139,6 +141,7 @@ func NewApp(opts RunOpts) *App {
 		mode:           startMode,
 		briefingV2:     opts.BriefingV2,
 		currentVersion: opts.CurrentVersion,
+		summaryLoading: make(map[string]bool),
 	}
 }
 
@@ -307,6 +310,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case fullSummaryLoadedMsg:
+		delete(a.summaryLoading, msg.articleID)
 		for i := range a.articles {
 			if a.articles[i].ID == msg.articleID {
 				a.articles[i].FullSummary = msg.fullSummary
@@ -322,6 +326,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case fullSummaryErrMsg:
+		delete(a.summaryLoading, msg.articleID)
 		a.err = fmt.Errorf("summary: %w", msg.err)
 		return a, nil
 
@@ -469,6 +474,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.pendingSummary = true
 			return a, textinput.Blink
 		}
+		a.summaryLoading[a.articles[a.cursor].ID] = true
 		return a, a.fetchFullSummary()
 	}
 
@@ -688,7 +694,8 @@ func (a *App) View() string {
 		selected = &a.articles[a.cursor]
 	}
 	innerPreviewW := previewWidth - 4
-	previewContent := renderPreview(selected, innerPreviewW, contentHeight, a.previewScroll)
+	isLoading := selected != nil && a.summaryLoading[selected.ID]
+	previewContent := renderPreview(selected, innerPreviewW, contentHeight, a.previewScroll, isLoading)
 
 	var previewPane string
 	if a.focus == focusPreview {
@@ -797,6 +804,7 @@ func (a *App) renderHelp() string {
 		"  tab           Switch focus between list and preview\n\n" +
 		dim.Render("Actions") + "\n" +
 		"  o, enter      Open article in browser\n" +
+		"  S             AI summary of full article\n" +
 		"  r             Refresh feeds\n" +
 		"  /             Search articles\n" +
 		"  f             Toggle source filter mode\n\n" +
