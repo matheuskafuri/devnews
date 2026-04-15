@@ -74,7 +74,7 @@ func renderPreview(article *cache.Article, width, height, scroll int, loadingSum
 
 	// Bottom rule + hints
 	parts = append(parts, rule)
-	hint := previewHintStyle.Render("S summarize  o open  v layout")
+	hint := previewHintStyle.Render("S summarize  o open  v layout  T theme")
 	parts = append(parts, hint)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)

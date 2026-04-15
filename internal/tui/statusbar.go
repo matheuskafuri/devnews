@@ -28,7 +28,7 @@ func renderStatusBar(articleCount int, filterLabel string, streak int, width int
 		left += fmt.Sprintf(" · %s %dd", streakAccentStyle.Render("streak"), streak)
 	}
 
-	right := " S summary  h home  / search  f filter  q quit "
+	right := " S summary  T theme  h home  / search  f filter  q quit "
 
 	if searching {
 		right = " esc cancel  enter search "
