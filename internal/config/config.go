@@ -67,7 +67,7 @@ func (c *Config) RefreshDuration() time.Duration {
 
 func (c *Config) RetentionDuration() time.Duration {
 	if c.Retention == "" {
-		return 7 * 24 * time.Hour // default: 90 days
+		return 7 * 24 * time.Hour // default: 7 days
 	}
 	// Support "Nd" day syntax
 	if len(c.Retention) > 1 && c.Retention[len(c.Retention)-1] == 'd' {
@@ -216,7 +216,11 @@ func SaveAIKey(provider, apiKey string) error {
 	if err != nil {
 		return fmt.Errorf("marshalling config: %w", err)
 	}
-	return os.WriteFile(path, data, 0o644)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func writeDefaults(path string) error {

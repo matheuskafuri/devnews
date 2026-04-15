@@ -4,12 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/matheuskafuri/devnews/internal/cache"
 	"github.com/matheuskafuri/devnews/internal/config"
+	"github.com/matheuskafuri/devnews/internal/scrape"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -51,7 +51,7 @@ func (f *RSSFetcher) Fetch(ctx context.Context, source config.Source) ([]cache.A
 		if desc == "" {
 			desc = item.Content
 		}
-		desc = truncate(stripHTML(desc), 300)
+		desc = truncate(scrape.StripHTML(desc), 300)
 
 		articles = append(articles, cache.Article{
 			ID:          articleID(item.Link),
@@ -80,22 +80,6 @@ func truncate(s string, n int) string {
 		return string(runes[:n])
 	}
 	return string(runes[:n-3]) + "..."
-}
-
-func stripHTML(s string) string {
-	var b strings.Builder
-	inTag := false
-	for _, r := range s {
-		switch {
-		case r == '<':
-			inTag = true
-		case r == '>':
-			inTag = false
-		case !inTag:
-			b.WriteRune(r)
-		}
-	}
-	return strings.Join(strings.Fields(b.String()), " ")
 }
 
 type FetchResult struct {

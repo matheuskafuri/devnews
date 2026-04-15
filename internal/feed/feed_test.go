@@ -1,6 +1,10 @@
 package feed
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/matheuskafuri/devnews/internal/scrape"
+)
 
 func TestArticleID(t *testing.T) {
 	id1 := articleID("https://example.com/post-1")
@@ -62,7 +66,7 @@ func TestStripHTML(t *testing.T) {
 		{"<a href=\"url\">Link</a> text", "Link text"},
 	}
 	for _, tt := range tests {
-		got := stripHTML(tt.input)
+		got := scrape.StripHTML(tt.input)
 		if got != tt.want {
 			t.Errorf("stripHTML(%q) = %q, want %q", tt.input, got, tt.want)
 		}

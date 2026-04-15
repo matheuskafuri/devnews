@@ -11,11 +11,10 @@ import (
 )
 
 var (
-	reScript = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	reStyle  = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	reBlock  = regexp.MustCompile(`(?i)</?(p|div|br|h[1-6]|li|tr|blockquote)[^>]*>`)
-	reTag    = regexp.MustCompile(`<[^>]+>`)
-	reSpaces = regexp.MustCompile(`\s+`)
+	reScriptOrStyle = regexp.MustCompile(`(?is)<(script|style)[^>]*>.*?</(script|style)>`)
+	reBlock         = regexp.MustCompile(`(?i)</?(p|div|br|h[1-6]|li|tr|blockquote)[^>]*>`)
+	reTag           = regexp.MustCompile(`<[^>]+>`)
+	reSpaces        = regexp.MustCompile(`\s+`)
 )
 
 const maxBodySize = 512 * 1024 // 512KB max download
@@ -25,8 +24,7 @@ var httpClient = &http.Client{Timeout: 15 * time.Second}
 
 // StripHTML removes HTML tags, scripts, styles and returns plain text.
 func StripHTML(s string) string {
-	s = reScript.ReplaceAllString(s, "")
-	s = reStyle.ReplaceAllString(s, "")
+	s = reScriptOrStyle.ReplaceAllString(s, "")
 	s = reBlock.ReplaceAllString(s, " ")
 	s = reTag.ReplaceAllString(s, "")
 	s = html.UnescapeString(s)

@@ -23,7 +23,7 @@ func renderPreview(article *cache.Article, width, height, scroll int, loadingSum
 		fmt.Sprintf("%s · %s", article.Source, article.Published.Format("Jan 2, 2006")),
 	)
 
-	rule := lipgloss.NewStyle().Foreground(colorSubtle).Render(strings.Repeat("─", contentWidth))
+	rule := previewRuleStyle.Render(strings.Repeat("─", contentWidth))
 
 	var parts []string
 	parts = append(parts, title, source, rule)
@@ -60,7 +60,7 @@ func renderPreview(article *cache.Article, width, height, scroll int, loadingSum
 	body := previewBodyStyle.Width(contentWidth).Render(wrapText(desc, contentWidth))
 	link := previewLinkStyle.Width(contentWidth).Render("Read more: " + article.Link)
 
-	hint := lipgloss.NewStyle().Foreground(colorDim).MarginTop(1).Render("Press Enter to open in browser")
+	hint := previewHintStyle.Render("Press Enter to open in browser")
 	parts = append(parts, body, "", link, hint)
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 

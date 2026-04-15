@@ -121,6 +121,25 @@ var (
 	briefingV2WhyStyle = lipgloss.NewStyle().
 				Foreground(briefingWhyColor)
 
+	// Shared overlay styles
+	overlayTitleStyle = lipgloss.NewStyle().
+				Foreground(colorAccent).
+				Bold(true)
+
+	overlayLabelStyle = lipgloss.NewStyle().
+				Foreground(colorText).
+				Bold(true)
+
+	overlayHintStyle = lipgloss.NewStyle().
+				Foreground(colorDim)
+
+	previewRuleStyle = lipgloss.NewStyle().
+				Foreground(colorSubtle)
+
+	previewHintStyle = lipgloss.NewStyle().
+				Foreground(colorDim).
+				MarginTop(1)
+
 	filterOverlayStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(colorAccent).
@@ -136,6 +155,14 @@ var (
 		"Platform":            lipgloss.Color("#00E5FF"),
 	}
 )
+
+func overlayBoxStyle(width int) lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorAccent).
+		Padding(1, 3).
+		Width(width)
+}
 
 func categoryStyle(cat string) lipgloss.Style {
 	color, ok := categoryColors[cat]

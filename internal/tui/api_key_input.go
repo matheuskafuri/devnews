@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/matheuskafuri/devnews/internal/ai"
 	"github.com/matheuskafuri/devnews/internal/config"
 )
@@ -62,24 +61,14 @@ func (a *App) handleAPIKeySaved(apiKey string) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) renderAPIKeyOverlay() string {
-	titleStyle := lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
-	labelStyle := lipgloss.NewStyle().Foreground(colorText).Bold(true)
-	hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6272a4"))
-
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("OpenAI API Key"))
+	b.WriteString(overlayTitleStyle.Render("OpenAI API Key"))
 	b.WriteString("\n\n")
-	b.WriteString(labelStyle.Render("Enter your API key to enable AI summaries"))
+	b.WriteString(overlayLabelStyle.Render("Enter your API key to enable AI summaries"))
 	b.WriteString("\n\n")
 	b.WriteString(a.apiKeyInput.View())
 	b.WriteString("\n\n")
-	b.WriteString(hintStyle.Render("enter save  esc cancel"))
+	b.WriteString(overlayHintStyle.Render("enter save  esc cancel"))
 
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorAccent).
-		Padding(1, 3).
-		Width(55)
-
-	return boxStyle.Render(b.String())
+	return overlayBoxStyle(55).Render(b.String())
 }
