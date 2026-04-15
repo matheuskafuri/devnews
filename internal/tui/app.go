@@ -47,6 +47,7 @@ const (
 	modeBriefingCard
 	modeRequestSource
 	modeAPIKeyInput
+	modeThemePicker
 )
 
 type App struct {
@@ -78,6 +79,9 @@ type App struct {
 	// API key input
 	apiKeyInput    textinput.Model
 	pendingSummary bool // true if we should trigger summary after key is saved
+
+	// Theme picker
+	themeCursor int
 
 	summaryLoading map[string]bool // article IDs currently being summarized
 
@@ -409,6 +413,8 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.handleRequestSourceKey(msg)
 	case modeAPIKeyInput:
 		return a.handleAPIKeyInputKey(msg)
+	case modeThemePicker:
+		return a.handleThemePickerKey(msg)
 	case modeSearch:
 		return a.handleSearchKey(msg)
 	case modeFilter:
@@ -496,6 +502,17 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, a.fetchFullSummary()
 	case "K":
 		return a, a.openAPIKeyInput(false)
+	case "T":
+		a.mode = modeThemePicker
+		// Set cursor to current theme
+		names := ThemeNames()
+		for i, n := range names {
+			if n == currentTheme.Name {
+				a.themeCursor = i
+				break
+			}
+		}
+		return a, nil
 	case "v":
 		switch a.layout {
 		case layoutSplit:
@@ -788,6 +805,11 @@ func (a *App) View() string {
 		view = overlayCenter(view, overlay, a.width, a.height)
 	}
 
+	if a.mode == modeThemePicker {
+		overlay := a.renderThemePickerOverlay()
+		view = overlayCenter(view, overlay, a.width, a.height)
+	}
+
 	return view
 }
 
@@ -864,6 +886,7 @@ func (a *App) renderHelp() string {
 		"  v             Cycle layout (split/list/preview)\n" +
 		"  S             AI summary of full article\n" +
 		"  K             Set/update OpenAI API key\n" +
+		"  T             Select theme\n" +
 		"  r             Refresh feeds\n" +
 		"  /             Search articles\n" +
 		"  f             Toggle source filter mode\n\n" +
