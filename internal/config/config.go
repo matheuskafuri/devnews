@@ -33,6 +33,7 @@ type Config struct {
 	Retention       string    `yaml:"retention"`
 	BriefSize       int       `yaml:"brief_size,omitempty"`
 	DefaultFocus    string    `yaml:"focus,omitempty"`
+	Theme           string    `yaml:"theme,omitempty"`
 	Sources         []Source  `yaml:"sources"`
 	AI              *AIConfig `yaml:"ai,omitempty"`
 }
@@ -212,6 +213,25 @@ func SaveAIKey(provider, apiKey string) error {
 		cfg.AI.Model = "gpt-4o-mini"
 	}
 
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshalling config: %w", err)
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// SaveTheme writes the theme name to the user's config file.
+func SaveTheme(themeName string) error {
+	path := DefaultConfigPath()
+	cfg, err := Load(path)
+	if err != nil {
+		return err
+	}
+	cfg.Theme = themeName
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshalling config: %w", err)

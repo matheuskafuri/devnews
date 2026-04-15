@@ -107,6 +107,11 @@ type RunOpts struct {
 }
 
 func NewApp(opts RunOpts) *App {
+	// Apply theme from config
+	if opts.Cfg.Theme != "" {
+		applyTheme(GetTheme(opts.Cfg.Theme))
+	}
+
 	ti := textinput.New()
 	ti.Placeholder = "Search articles..."
 	ti.Prompt = searchPromptStyle.Render("/ ")
