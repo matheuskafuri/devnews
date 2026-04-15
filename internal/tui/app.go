@@ -27,6 +27,14 @@ const (
 	focusPreview
 )
 
+type layout int
+
+const (
+	layoutSplit layout = iota
+	layoutList
+	layoutPreview
+)
+
 type mode int
 
 const (
@@ -47,6 +55,7 @@ type App struct {
 	articles []cache.Article
 	cursor   int
 	focus    focusPane
+	layout   layout
 	mode     mode
 
 	width  int
@@ -411,28 +420,30 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q":
 		return a, tea.Quit
 	case "j", "down":
-		if a.focus == focusList && a.cursor < len(a.articles)-1 {
+		if (a.focus == focusList || a.layout == layoutPreview || a.layout == layoutList) && a.cursor < len(a.articles)-1 {
 			a.cursor++
 			a.previewScroll = 0
 			return a, a.maybeFetchSummary()
-		} else if a.focus == focusPreview {
+		} else if a.focus == focusPreview && a.layout == layoutSplit {
 			a.previewScroll++
 		}
 		return a, nil
 	case "k", "up":
-		if a.focus == focusList && a.cursor > 0 {
+		if (a.focus == focusList || a.layout == layoutPreview || a.layout == layoutList) && a.cursor > 0 {
 			a.cursor--
 			a.previewScroll = 0
 			return a, a.maybeFetchSummary()
-		} else if a.focus == focusPreview && a.previewScroll > 0 {
+		} else if a.focus == focusPreview && a.layout == layoutSplit && a.previewScroll > 0 {
 			a.previewScroll--
 		}
 		return a, nil
 	case "tab":
-		if a.focus == focusList {
-			a.focus = focusPreview
-		} else {
-			a.focus = focusList
+		if a.layout == layoutSplit {
+			if a.focus == focusList {
+				a.focus = focusPreview
+			} else {
+				a.focus = focusList
+			}
 		}
 		return a, nil
 	case "o", "enter":
@@ -480,6 +491,16 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, a.fetchFullSummary()
 	case "K":
 		return a, a.openAPIKeyInput(false)
+	case "v":
+		switch a.layout {
+		case layoutSplit:
+			a.layout = layoutList
+		case layoutList:
+			a.layout = layoutPreview
+		case layoutPreview:
+			a.layout = layoutSplit
+		}
+		return a, nil
 	}
 
 	return a, nil
@@ -657,9 +678,6 @@ func (a *App) View() string {
 	statusHeight := 1
 	contentHeight := a.height - headerHeight - filterHeight - statusHeight - 4 // borders
 
-	listWidth := int(float64(a.width) * 0.35)
-	previewWidth := a.width - listWidth - 1 // gap
-
 	if contentHeight < 3 {
 		contentHeight = 3
 	}
@@ -681,35 +699,56 @@ func (a *App) View() string {
 		filter = a.searchInput.View()
 	}
 
-	// List pane
-	innerListW := listWidth - 4 // border + padding
-	listContent := renderList(a.articles, a.cursor, contentHeight, innerListW)
+	var content string
+	switch a.layout {
+	case layoutList:
+		// Full-width list
+		innerW := a.width - 4
+		listContent := renderList(a.articles, a.cursor, contentHeight, innerW)
+		content = listPaneActiveStyle.Width(a.width - 2).Height(contentHeight).Render(listContent)
 
-	var listPane string
-	if a.focus == focusList {
-		listPane = listPaneActiveStyle.Width(listWidth - 2).Height(contentHeight).Render(listContent)
-	} else {
-		listPane = listPaneStyle.Width(listWidth - 2).Height(contentHeight).Render(listContent)
+	case layoutPreview:
+		// Full-width preview
+		var selected *cache.Article
+		if len(a.articles) > 0 && a.cursor < len(a.articles) {
+			selected = &a.articles[a.cursor]
+		}
+		innerW := a.width - 4
+		isLoading := selected != nil && a.summaryLoading[selected.ID]
+		previewContent := renderPreview(selected, innerW, contentHeight, a.previewScroll, isLoading)
+		content = previewPaneActiveStyle.Width(a.width - 2).Height(contentHeight).Render(previewContent)
+
+	default: // layoutSplit
+		listWidth := int(float64(a.width) * 0.35)
+		previewWidth := a.width - listWidth - 1
+
+		innerListW := listWidth - 4
+		listContent := renderList(a.articles, a.cursor, contentHeight, innerListW)
+
+		var listPane string
+		if a.focus == focusList {
+			listPane = listPaneActiveStyle.Width(listWidth - 2).Height(contentHeight).Render(listContent)
+		} else {
+			listPane = listPaneStyle.Width(listWidth - 2).Height(contentHeight).Render(listContent)
+		}
+
+		var selected *cache.Article
+		if len(a.articles) > 0 && a.cursor < len(a.articles) {
+			selected = &a.articles[a.cursor]
+		}
+		innerPreviewW := previewWidth - 4
+		isLoading := selected != nil && a.summaryLoading[selected.ID]
+		previewContent := renderPreview(selected, innerPreviewW, contentHeight, a.previewScroll, isLoading)
+
+		var previewPane string
+		if a.focus == focusPreview {
+			previewPane = previewPaneActiveStyle.Width(previewWidth - 2).Height(contentHeight).Render(previewContent)
+		} else {
+			previewPane = previewPaneStyle.Width(previewWidth - 2).Height(contentHeight).Render(previewContent)
+		}
+
+		content = lipgloss.JoinHorizontal(lipgloss.Top, listPane, previewPane)
 	}
-
-	// Preview pane
-	var selected *cache.Article
-	if len(a.articles) > 0 && a.cursor < len(a.articles) {
-		selected = &a.articles[a.cursor]
-	}
-	innerPreviewW := previewWidth - 4
-	isLoading := selected != nil && a.summaryLoading[selected.ID]
-	previewContent := renderPreview(selected, innerPreviewW, contentHeight, a.previewScroll, isLoading)
-
-	var previewPane string
-	if a.focus == focusPreview {
-		previewPane = previewPaneActiveStyle.Width(previewWidth - 2).Height(contentHeight).Render(previewContent)
-	} else {
-		previewPane = previewPaneStyle.Width(previewWidth - 2).Height(contentHeight).Render(previewContent)
-	}
-
-	// Join panes
-	content := lipgloss.JoinHorizontal(lipgloss.Top, listPane, previewPane)
 
 	// Status bar
 	status := renderStatusBar(
@@ -719,6 +758,7 @@ func (a *App) View() string {
 		a.width,
 		a.mode == modeSearch,
 		a.refreshing,
+		a.layout,
 	)
 
 	if a.refreshing {
@@ -816,6 +856,7 @@ func (a *App) renderHelp() string {
 		"  tab           Switch focus between list and preview\n\n" +
 		dim.Render("Actions") + "\n" +
 		"  o, enter      Open article in browser\n" +
+		"  v             Cycle layout (split/list/preview)\n" +
 		"  S             AI summary of full article\n" +
 		"  K             Set/update OpenAI API key\n" +
 		"  r             Refresh feeds\n" +
