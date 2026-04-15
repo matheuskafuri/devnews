@@ -195,6 +195,30 @@ func mergeDefaultSources(cfg *Config, defaults *Config) {
 	}
 }
 
+// SaveAIKey writes the AI provider and API key to the user's config file.
+func SaveAIKey(provider, apiKey string) error {
+	path := DefaultConfigPath()
+	cfg, err := Load(path)
+	if err != nil {
+		return err
+	}
+
+	if cfg.AI == nil {
+		cfg.AI = &AIConfig{}
+	}
+	cfg.AI.Provider = provider
+	cfg.AI.APIKey = apiKey
+	if cfg.AI.Model == "" {
+		cfg.AI.Model = "gpt-4o-mini"
+	}
+
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshalling config: %w", err)
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
 func writeDefaults(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
