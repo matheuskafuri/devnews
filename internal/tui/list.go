@@ -29,11 +29,11 @@ func timeColor(published time.Time) lipgloss.Style {
 	age := time.Since(published)
 	switch {
 	case age < 6*time.Hour:
-		return lipgloss.NewStyle().Foreground(colorAccent) // bright/fresh
+		return itemTimeFreshStyle
 	case age < 24*time.Hour:
-		return itemTimeStyle // normal
+		return itemTimeStyle
 	default:
-		return lipgloss.NewStyle().Foreground(colorDim) // old/faded
+		return itemReadStyle // dim for old articles
 	}
 }
 

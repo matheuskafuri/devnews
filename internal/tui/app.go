@@ -82,7 +82,8 @@ type App struct {
 	pendingSummary bool // true if we should trigger summary after key is saved
 
 	// Theme picker
-	themeCursor int
+	themeCursor   int
+	originalTheme string
 
 	summaryLoading map[string]bool // article IDs currently being summarized
 
@@ -510,7 +511,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, a.openAPIKeyInput(false)
 	case "T":
 		a.mode = modeThemePicker
-		// Set cursor to current theme
+		a.originalTheme = currentTheme.Name
 		names := ThemeNames()
 		for i, n := range names {
 			if n == currentTheme.Name {
@@ -677,30 +678,28 @@ func (a *App) withBottomBar(content string, hints string) string {
 }
 
 func (a *App) breadcrumb() string {
-	dim := lipgloss.NewStyle().Foreground(colorDim)
-	accent := lipgloss.NewStyle().Foreground(colorAccent)
-	sep := dim.Render(" › ")
+	sep := helpDimStyle.Render(" › ")
 
 	switch a.mode {
 	case modeHome:
-		return accent.Render("Home")
+		return searchPromptStyle.Render("Home")
 	case modeNormal, modeSearch, modeFilter, modeAPIKeyInput, modeThemePicker:
-		bc := accent.Render("Home") + sep + accent.Render("Browse")
+		bc := searchPromptStyle.Render("Home") + sep + searchPromptStyle.Render("Browse")
 		if a.mode == modeSearch {
-			bc += sep + dim.Render("Search")
+			bc += sep + helpDimStyle.Render("Search")
 		} else if a.mode == modeFilter {
-			bc += sep + dim.Render("Filter")
+			bc += sep + helpDimStyle.Render("Filter")
 		}
 		return bc
 	case modeBriefingOpening:
-		return accent.Render("Home") + sep + accent.Render("Briefing")
+		return searchPromptStyle.Render("Home") + sep + searchPromptStyle.Render("Briefing")
 	case modeBriefingCard:
 		card := fmt.Sprintf("Card %d/%d", a.cardCursor+1, len(a.briefingV2.Cards))
-		return accent.Render("Home") + sep + accent.Render("Briefing") + sep + dim.Render(card)
+		return searchPromptStyle.Render("Home") + sep + searchPromptStyle.Render("Briefing") + sep + helpDimStyle.Render(card)
 	case modeRequestSource:
-		return accent.Render("Home") + sep + dim.Render("Request Source")
+		return searchPromptStyle.Render("Home") + sep + helpDimStyle.Render("Request Source")
 	case modeHelp:
-		return accent.Render("Home") + sep + dim.Render("Help")
+		return searchPromptStyle.Render("Home") + sep + helpDimStyle.Render("Help")
 	}
 	return ""
 }

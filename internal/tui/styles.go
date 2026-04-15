@@ -148,15 +148,8 @@ var (
 				BorderForeground(colorAccent).
 				Padding(1, 2)
 
-	categoryColors = map[string]lipgloss.Color{
-		"AI/ML":               lipgloss.Color("#DA70D6"),
-		"Infrastructure":      lipgloss.Color("#00FFAB"),
-		"Databases":           lipgloss.Color("#7FFF00"),
-		"Distributed Systems": lipgloss.Color("#FFD700"),
-		"Security":            lipgloss.Color("#FF6B6B"),
-		"Developer Tools":     lipgloss.Color("#87CEEB"),
-		"Platform":            lipgloss.Color("#00E5FF"),
-	}
+	// Per-render cached styles (rebuilt by applyTheme)
+	itemTimeFreshStyle = lipgloss.NewStyle().Foreground(colorAccent)
 )
 
 func overlayBoxStyle(width int) lipgloss.Style {

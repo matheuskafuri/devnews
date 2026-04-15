@@ -190,8 +190,8 @@ func applyTheme(t Theme) {
 	briefingV2MetaStyle = lipgloss.NewStyle().Foreground(t.BriefingMeta)
 	briefingV2WhyStyle = lipgloss.NewStyle().Foreground(t.BriefingWhy)
 
-	// Category colors
-	categoryColors = t.CategoryColors
+	// Per-render cached styles
+	itemTimeFreshStyle = lipgloss.NewStyle().Foreground(colorAccent)
 
 	// Filter overlay styles
 	overlayActiveNameStyle = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)

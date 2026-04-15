@@ -13,6 +13,7 @@ func (a *App) handleThemePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "esc", "T":
+		applyTheme(GetTheme(a.originalTheme))
 		a.mode = modeNormal
 		return a, nil
 	case "j", "down":
