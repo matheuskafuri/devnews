@@ -53,6 +53,9 @@ func (a *App) handleAPIKeySaved(apiKey string) (tea.Model, tea.Cmd) {
 
 	if a.pendingSummary {
 		a.pendingSummary = false
+		if len(a.articles) > 0 && a.cursor < len(a.articles) {
+			a.summaryLoading[a.articles[a.cursor].ID] = true
+		}
 		return a, a.fetchFullSummary()
 	}
 	return a, nil
