@@ -8,7 +8,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 func (a *App) handleRequestSourceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -89,28 +88,18 @@ func submitSourceRequest(name, url string) tea.Cmd {
 }
 
 func (a *App) renderRequestSourceOverlay() string {
-	titleStyle := lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
-	labelStyle := lipgloss.NewStyle().Foreground(colorText).Bold(true)
-	hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6272a4"))
-
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Request a Source"))
+	b.WriteString(overlayTitleStyle.Render("Request a Source"))
 	b.WriteString("\n\n")
-	b.WriteString(labelStyle.Render("Name"))
+	b.WriteString(overlayLabelStyle.Render("Name"))
 	b.WriteString("\n")
 	b.WriteString(a.sourceNameInput.View())
 	b.WriteString("\n\n")
-	b.WriteString(labelStyle.Render("URL"))
+	b.WriteString(overlayLabelStyle.Render("URL"))
 	b.WriteString("\n")
 	b.WriteString(a.sourceURLInput.View())
 	b.WriteString("\n\n")
-	b.WriteString(hintStyle.Render("tab switch  enter submit  esc cancel"))
+	b.WriteString(overlayHintStyle.Render("tab switch  enter submit  esc cancel"))
 
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorAccent).
-		Padding(1, 3).
-		Width(50)
-
-	return boxStyle.Render(b.String())
+	return overlayBoxStyle(50).Render(b.String())
 }

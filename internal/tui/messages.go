@@ -43,3 +43,17 @@ type sourceRequestResultMsg struct {
 
 type clearStatusMsg struct{}
 
+type fullSummaryLoadedMsg struct {
+	articleID   string
+	fullSummary string
+}
+
+type fullSummaryErrMsg struct {
+	articleID string
+	err       error
+}
+
+type apiKeySavedMsg struct {
+	apiKey string
+}
+

@@ -16,6 +16,7 @@ import (
 	"github.com/matheuskafuri/devnews/internal/cache"
 	"github.com/matheuskafuri/devnews/internal/config"
 	"github.com/matheuskafuri/devnews/internal/feed"
+	"github.com/matheuskafuri/devnews/internal/scrape"
 	"github.com/matheuskafuri/devnews/internal/update"
 )
 
@@ -24,6 +25,14 @@ type focusPane int
 const (
 	focusList focusPane = iota
 	focusPreview
+)
+
+type layout int
+
+const (
+	layoutSplit layout = iota
+	layoutList
+	layoutPreview
 )
 
 type mode int
@@ -37,14 +46,18 @@ const (
 	modeBriefingOpening
 	modeBriefingCard
 	modeRequestSource
+	modeAPIKeyInput
+	modeThemePicker
 )
 
 type App struct {
 	cfg      *config.Config
 	db       *cache.Cache
 	articles []cache.Article
-	cursor   int
-	focus    focusPane
+	cursor      int
+	savedCursor int
+	focus       focusPane
+	layout   layout
 	mode     mode
 
 	width  int
@@ -63,6 +76,16 @@ type App struct {
 	sourceURLInput  textinput.Model
 	sourceFormFocus int
 	statusMessage   string
+
+	// API key input
+	apiKeyInput    textinput.Model
+	pendingSummary bool // true if we should trigger summary after key is saved
+
+	// Theme picker
+	themeCursor   int
+	originalTheme string
+
+	summaryLoading map[string]bool // article IDs currently being summarized
 
 	// State
 	refreshing         bool
@@ -90,6 +113,11 @@ type RunOpts struct {
 }
 
 func NewApp(opts RunOpts) *App {
+	// Apply theme from config
+	if opts.Cfg.Theme != "" {
+		applyTheme(GetTheme(opts.Cfg.Theme))
+	}
+
 	ti := textinput.New()
 	ti.Placeholder = "Search articles..."
 	ti.Prompt = searchPromptStyle.Render("/ ")
@@ -107,6 +135,11 @@ func NewApp(opts RunOpts) *App {
 	urlInput.Placeholder = "e.g. https://news.ycombinator.com/rss"
 	urlInput.CharLimit = 200
 
+	apiKeyTI := textinput.New()
+	apiKeyTI.Placeholder = "sk-..."
+	apiKeyTI.CharLimit = 200
+	apiKeyTI.EchoMode = textinput.EchoPassword
+
 	startMode := modeHome
 	if opts.BrowseMode {
 		startMode = modeNormal
@@ -122,11 +155,13 @@ func NewApp(opts RunOpts) *App {
 		searchInput:    ti,
 		sourceNameInput: nameInput,
 		sourceURLInput:  urlInput,
+		apiKeyInput:    apiKeyTI,
 		spinner:        sp,
 		currentDate:    time.Now().Format("Jan 2"),
 		mode:           startMode,
 		briefingV2:     opts.BriefingV2,
 		currentVersion: opts.CurrentVersion,
+		summaryLoading: make(map[string]bool),
 	}
 }
 
@@ -294,6 +329,30 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return nil
 		}
 
+	case fullSummaryLoadedMsg:
+		delete(a.summaryLoading, msg.articleID)
+		for i := range a.articles {
+			if a.articles[i].ID == msg.articleID {
+				a.articles[i].FullSummary = msg.fullSummary
+				break
+			}
+		}
+		db := a.db
+		id := msg.articleID
+		summary := msg.fullSummary
+		return a, func() tea.Msg {
+			db.UpdateArticleFullSummary(id, summary)
+			return nil
+		}
+
+	case fullSummaryErrMsg:
+		delete(a.summaryLoading, msg.articleID)
+		a.err = fmt.Errorf("summary: %w", msg.err)
+		return a, nil
+
+	case apiKeySavedMsg:
+		return a.handleAPIKeySaved(msg.apiKey)
+
 	case whyItMattersMsg:
 		if a.briefingV2 != nil && msg.cardIndex < len(a.briefingV2.Cards) {
 			a.briefingV2.Cards[msg.cardIndex].Article.WhyItMatters = msg.text
@@ -354,6 +413,10 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.handleBriefingCardKey(msg)
 	case modeRequestSource:
 		return a.handleRequestSourceKey(msg)
+	case modeAPIKeyInput:
+		return a.handleAPIKeyInputKey(msg)
+	case modeThemePicker:
+		return a.handleThemePickerKey(msg)
 	case modeSearch:
 		return a.handleSearchKey(msg)
 	case modeFilter:
@@ -367,36 +430,48 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Normal mode
 	switch msg.String() {
+	case "esc":
+		a.savedCursor = a.cursor
+		a.mode = modeHome
+		return a, nil
 	case "q":
 		return a, tea.Quit
 	case "j", "down":
-		if a.focus == focusList && a.cursor < len(a.articles)-1 {
+		if (a.focus == focusList || a.layout == layoutPreview || a.layout == layoutList) && a.cursor < len(a.articles)-1 {
 			a.cursor++
 			a.previewScroll = 0
 			return a, a.maybeFetchSummary()
-		} else if a.focus == focusPreview {
+		} else if a.focus == focusPreview && a.layout == layoutSplit {
 			a.previewScroll++
 		}
 		return a, nil
 	case "k", "up":
-		if a.focus == focusList && a.cursor > 0 {
+		if (a.focus == focusList || a.layout == layoutPreview || a.layout == layoutList) && a.cursor > 0 {
 			a.cursor--
 			a.previewScroll = 0
 			return a, a.maybeFetchSummary()
-		} else if a.focus == focusPreview && a.previewScroll > 0 {
+		} else if a.focus == focusPreview && a.layout == layoutSplit && a.previewScroll > 0 {
 			a.previewScroll--
 		}
 		return a, nil
 	case "tab":
-		if a.focus == focusList {
-			a.focus = focusPreview
-		} else {
-			a.focus = focusList
+		if a.layout == layoutSplit {
+			if a.focus == focusList {
+				a.focus = focusPreview
+			} else {
+				a.focus = focusList
+			}
 		}
 		return a, nil
 	case "o", "enter":
 		if len(a.articles) > 0 && a.cursor < len(a.articles) {
-			return a, openBrowserCmd(a.articles[a.cursor].Link)
+			a.articles[a.cursor].Read = true
+			db := a.db
+			id := a.articles[a.cursor].ID
+			return a, tea.Batch(openBrowserCmd(a.articles[a.cursor].Link), func() tea.Msg {
+				db.MarkArticleRead(id)
+				return nil
+			})
 		}
 		return a, nil
 	case "/":
@@ -414,10 +489,46 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 	case "h":
+		a.savedCursor = a.cursor
 		a.mode = modeHome
 		return a, nil
 	case "?":
 		a.mode = modeHelp
+		return a, nil
+	case "S":
+		if len(a.articles) == 0 || a.cursor >= len(a.articles) {
+			return a, nil
+		}
+		if a.articles[a.cursor].FullSummary != "" {
+			return a, nil
+		}
+		if a.summarizer == nil {
+			return a, a.openAPIKeyInput(true)
+		}
+		a.summaryLoading[a.articles[a.cursor].ID] = true
+		return a, a.fetchFullSummary()
+	case "K":
+		return a, a.openAPIKeyInput(false)
+	case "T":
+		a.mode = modeThemePicker
+		a.originalTheme = currentTheme.Name
+		names := ThemeNames()
+		for i, n := range names {
+			if n == currentTheme.Name {
+				a.themeCursor = i
+				break
+			}
+		}
+		return a, nil
+	case "v":
+		switch a.layout {
+		case layoutSplit:
+			a.layout = layoutList
+		case layoutList:
+			a.layout = layoutPreview
+		case layoutPreview:
+			a.layout = layoutSplit
+		}
 		return a, nil
 	}
 
@@ -435,6 +546,7 @@ func (a *App) handleHomeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, a.loadArticlesCmd()
 	case "e", "2":
 		a.mode = modeNormal
+		a.cursor = a.savedCursor
 		return a, a.loadArticlesCmd()
 	case "s":
 		a.mode = modeRequestSource
@@ -452,6 +564,9 @@ func (a *App) handleHomeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (a *App) handleBriefingOpeningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "esc":
+		a.mode = modeHome
+		return a, nil
 	case "enter":
 		a.mode = modeBriefingCard
 		a.cardCursor = 0
@@ -470,6 +585,9 @@ func (a *App) handleBriefingOpeningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (a *App) handleBriefingCardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "esc":
+		a.mode = modeBriefingOpening
+		return a, nil
 	case "n", "j", "right":
 		if a.briefingV2 != nil && a.cardCursor < len(a.briefingV2.Cards)-1 {
 			a.cardCursor++
@@ -559,6 +677,33 @@ func (a *App) withBottomBar(content string, hints string) string {
 	return strings.Join(lines, "\n")
 }
 
+func (a *App) breadcrumb() string {
+	sep := helpDimStyle.Render(" › ")
+
+	switch a.mode {
+	case modeHome:
+		return searchPromptStyle.Render("Home")
+	case modeNormal, modeSearch, modeFilter, modeAPIKeyInput, modeThemePicker:
+		bc := searchPromptStyle.Render("Home") + sep + searchPromptStyle.Render("Browse")
+		if a.mode == modeSearch {
+			bc += sep + helpDimStyle.Render("Search")
+		} else if a.mode == modeFilter {
+			bc += sep + helpDimStyle.Render("Filter")
+		}
+		return bc
+	case modeBriefingOpening:
+		return searchPromptStyle.Render("Home") + sep + searchPromptStyle.Render("Briefing")
+	case modeBriefingCard:
+		card := fmt.Sprintf("Card %d/%d", a.cardCursor+1, len(a.briefingV2.Cards))
+		return searchPromptStyle.Render("Home") + sep + searchPromptStyle.Render("Briefing") + sep + helpDimStyle.Render(card)
+	case modeRequestSource:
+		return searchPromptStyle.Render("Home") + sep + helpDimStyle.Render("Request Source")
+	case modeHelp:
+		return searchPromptStyle.Render("Home") + sep + helpDimStyle.Render("Help")
+	}
+	return ""
+}
+
 func (a *App) View() string {
 	if a.width == 0 {
 		return lipgloss.NewStyle().Foreground(colorAccent).Render("  devnews")
@@ -596,21 +741,20 @@ func (a *App) View() string {
 	statusHeight := 1
 	contentHeight := a.height - headerHeight - filterHeight - statusHeight - 4 // borders
 
-	listWidth := int(float64(a.width) * 0.35)
-	previewWidth := a.width - listWidth - 1 // gap
-
 	if contentHeight < 3 {
 		contentHeight = 3
 	}
 
 	// Header
 	headerLeft := headerStyle.Render("devnews")
+	bc := a.breadcrumb()
 	headerRight := headerDateStyle.Render(a.currentDate)
-	headerGap := a.width - lipgloss.Width(headerLeft) - lipgloss.Width(headerRight)
+	headerGap := a.width - lipgloss.Width(headerLeft) - lipgloss.Width(bc) - lipgloss.Width(headerRight)
 	if headerGap < 0 {
 		headerGap = 0
 	}
-	header := headerLeft + fmt.Sprintf("%*s", headerGap, "") + headerRight
+	// Put breadcrumb after title with a small gap, date on the right
+	header := headerLeft + "  " + bc + fmt.Sprintf("%*s", headerGap, "") + headerRight
 
 	// Filter bar
 	filter := a.filterBar.render(a.width)
@@ -620,34 +764,56 @@ func (a *App) View() string {
 		filter = a.searchInput.View()
 	}
 
-	// List pane
-	innerListW := listWidth - 4 // border + padding
-	listContent := renderList(a.articles, a.cursor, contentHeight, innerListW)
+	var content string
+	switch a.layout {
+	case layoutList:
+		// Full-width list
+		innerW := a.width - 4
+		listContent := renderList(a.articles, a.cursor, contentHeight, innerW)
+		content = listPaneActiveStyle.Width(a.width - 2).Height(contentHeight).Render(listContent)
 
-	var listPane string
-	if a.focus == focusList {
-		listPane = listPaneActiveStyle.Width(listWidth - 2).Height(contentHeight).Render(listContent)
-	} else {
-		listPane = listPaneStyle.Width(listWidth - 2).Height(contentHeight).Render(listContent)
+	case layoutPreview:
+		// Full-width preview
+		var selected *cache.Article
+		if len(a.articles) > 0 && a.cursor < len(a.articles) {
+			selected = &a.articles[a.cursor]
+		}
+		innerW := a.width - 4
+		isLoading := selected != nil && a.summaryLoading[selected.ID]
+		previewContent := renderPreview(selected, innerW, contentHeight, a.previewScroll, isLoading)
+		content = previewPaneActiveStyle.Width(a.width - 2).Height(contentHeight).Render(previewContent)
+
+	default: // layoutSplit
+		listWidth := int(float64(a.width) * 0.35)
+		previewWidth := a.width - listWidth - 1
+
+		innerListW := listWidth - 4
+		listContent := renderList(a.articles, a.cursor, contentHeight, innerListW)
+
+		var listPane string
+		if a.focus == focusList {
+			listPane = listPaneActiveStyle.Width(listWidth - 2).Height(contentHeight).Render(listContent)
+		} else {
+			listPane = listPaneStyle.Width(listWidth - 2).Height(contentHeight).Render(listContent)
+		}
+
+		var selected *cache.Article
+		if len(a.articles) > 0 && a.cursor < len(a.articles) {
+			selected = &a.articles[a.cursor]
+		}
+		innerPreviewW := previewWidth - 4
+		isLoading := selected != nil && a.summaryLoading[selected.ID]
+		previewContent := renderPreview(selected, innerPreviewW, contentHeight, a.previewScroll, isLoading)
+
+		var previewPane string
+		if a.focus == focusPreview {
+			previewPane = previewPaneActiveStyle.Width(previewWidth - 2).Height(contentHeight).Render(previewContent)
+		} else {
+			previewPane = previewPaneStyle.Width(previewWidth - 2).Height(contentHeight).Render(previewContent)
+		}
+
+		content = lipgloss.JoinHorizontal(lipgloss.Top, listPane, previewPane)
 	}
-
-	// Preview pane
-	var selected *cache.Article
-	if len(a.articles) > 0 && a.cursor < len(a.articles) {
-		selected = &a.articles[a.cursor]
-	}
-	innerPreviewW := previewWidth - 4
-	previewContent := renderPreview(selected, innerPreviewW, contentHeight, a.previewScroll)
-
-	var previewPane string
-	if a.focus == focusPreview {
-		previewPane = previewPaneActiveStyle.Width(previewWidth - 2).Height(contentHeight).Render(previewContent)
-	} else {
-		previewPane = previewPaneStyle.Width(previewWidth - 2).Height(contentHeight).Render(previewContent)
-	}
-
-	// Join panes
-	content := lipgloss.JoinHorizontal(lipgloss.Top, listPane, previewPane)
 
 	// Status bar
 	status := renderStatusBar(
@@ -657,6 +823,7 @@ func (a *App) View() string {
 		a.width,
 		a.mode == modeSearch,
 		a.refreshing,
+		a.layout,
 	)
 
 	if a.refreshing {
@@ -676,7 +843,54 @@ func (a *App) View() string {
 		view = overlayCenter(view, overlay, a.width, a.height)
 	}
 
+	if a.mode == modeAPIKeyInput {
+		overlay := a.renderAPIKeyOverlay()
+		view = overlayCenter(view, overlay, a.width, a.height)
+	}
+
+	if a.mode == modeThemePicker {
+		overlay := a.renderThemePickerOverlay()
+		view = overlayCenter(view, overlay, a.width, a.height)
+	}
+
 	return view
+}
+
+func (a *App) openAPIKeyInput(pendingSummary bool) tea.Cmd {
+	a.mode = modeAPIKeyInput
+	a.apiKeyInput.SetValue("")
+	a.apiKeyInput.Focus()
+	a.pendingSummary = pendingSummary
+	return textinput.Blink
+}
+
+func (a *App) fetchFullSummary() tea.Cmd {
+	if a.summarizer == nil || len(a.articles) == 0 || a.cursor >= len(a.articles) {
+		return nil
+	}
+	article := a.articles[a.cursor]
+	if article.FullSummary != "" {
+		return nil
+	}
+	s := a.summarizer
+	link := article.Link
+	title := article.Title
+	id := article.ID
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		text, err := scrape.Fetch(link)
+		if err != nil {
+			return fullSummaryErrMsg{articleID: id, err: err}
+		}
+
+		summary, err := s.SummarizeArticle(ctx, title, text)
+		if err != nil {
+			return fullSummaryErrMsg{articleID: id, err: err}
+		}
+		return fullSummaryLoadedMsg{articleID: id, fullSummary: summary}
+	}
 }
 
 func (a *App) maybeFetchSummary() tea.Cmd {
@@ -712,6 +926,10 @@ func (a *App) renderHelp() string {
 		"  tab           Switch focus between list and preview\n\n" +
 		dim.Render("Actions") + "\n" +
 		"  o, enter      Open article in browser\n" +
+		"  v             Cycle layout (split/list/preview)\n" +
+		"  S             AI summary of full article\n" +
+		"  K             Set/update OpenAI API key\n" +
+		"  T             Select theme\n" +
 		"  r             Refresh feeds\n" +
 		"  /             Search articles\n" +
 		"  f             Toggle source filter mode\n\n" +

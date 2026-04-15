@@ -80,7 +80,7 @@ func renderCardView(card briefing.Card, total int, width, height int) string {
 	// Wrap in rounded border
 	cardBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#00E5FF")).
+		BorderForeground(currentTheme.Accent).
 		Padding(0, 1).
 		Width(cardWidth).
 		Render(cardContent)

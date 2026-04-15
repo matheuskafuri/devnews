@@ -33,6 +33,7 @@ type Config struct {
 	Retention       string    `yaml:"retention"`
 	BriefSize       int       `yaml:"brief_size,omitempty"`
 	DefaultFocus    string    `yaml:"focus,omitempty"`
+	Theme           string    `yaml:"theme,omitempty"`
 	Sources         []Source  `yaml:"sources"`
 	AI              *AIConfig `yaml:"ai,omitempty"`
 }
@@ -67,7 +68,7 @@ func (c *Config) RefreshDuration() time.Duration {
 
 func (c *Config) RetentionDuration() time.Duration {
 	if c.Retention == "" {
-		return 7 * 24 * time.Hour // default: 90 days
+		return 7 * 24 * time.Hour // default: 7 days
 	}
 	// Support "Nd" day syntax
 	if len(c.Retention) > 1 && c.Retention[len(c.Retention)-1] == 'd' {
@@ -193,6 +194,46 @@ func mergeDefaultSources(cfg *Config, defaults *Config) {
 			cfg.Sources = append(cfg.Sources, s)
 		}
 	}
+}
+
+// saveConfig loads the config, applies a mutation, and writes it back atomically.
+func saveConfig(mutate func(*Config)) error {
+	path := DefaultConfigPath()
+	cfg, err := Load(path)
+	if err != nil {
+		return err
+	}
+	mutate(cfg)
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshalling config: %w", err)
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// SaveAIKey writes the AI provider and API key to the user's config file.
+func SaveAIKey(provider, apiKey string) error {
+	return saveConfig(func(cfg *Config) {
+		if cfg.AI == nil {
+			cfg.AI = &AIConfig{}
+		}
+		cfg.AI.Provider = provider
+		cfg.AI.APIKey = apiKey
+		if cfg.AI.Model == "" {
+			cfg.AI.Model = "gpt-4o-mini"
+		}
+	})
+}
+
+// SaveTheme writes the theme name to the user's config file.
+func SaveTheme(themeName string) error {
+	return saveConfig(func(cfg *Config) {
+		cfg.Theme = themeName
+	})
 }
 
 func writeDefaults(path string) error {

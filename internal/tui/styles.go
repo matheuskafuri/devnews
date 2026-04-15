@@ -3,14 +3,14 @@ package tui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	// Monochrome + cyan neon accent palette
-	colorAccent  = lipgloss.AdaptiveColor{Light: "#0097A7", Dark: "#00E5FF"}
-	colorText    = lipgloss.AdaptiveColor{Light: "#333333", Dark: "#CCCCCC"}
-	colorMuted   = lipgloss.AdaptiveColor{Light: "#666666", Dark: "#666666"}
-	colorDim     = lipgloss.AdaptiveColor{Light: "#999999", Dark: "#444444"}
-	colorSubtle  = lipgloss.AdaptiveColor{Light: "#CCCCCC", Dark: "#222222"}
-	colorSurface = lipgloss.AdaptiveColor{Light: "#F0F0F0", Dark: "#111111"}
-	colorBody    = lipgloss.AdaptiveColor{Light: "#444444", Dark: "#AAAAAA"}
+	// Color variables — reassigned by applyTheme().
+	colorAccent  lipgloss.TerminalColor = lipgloss.Color("#00E5FF")
+	colorText    lipgloss.TerminalColor = lipgloss.Color("#CCCCCC")
+	colorMuted   lipgloss.TerminalColor = lipgloss.Color("#666666")
+	colorDim     lipgloss.TerminalColor = lipgloss.Color("#444444")
+	colorSubtle  lipgloss.TerminalColor = lipgloss.Color("#222222")
+	colorSurface lipgloss.TerminalColor = lipgloss.Color("#111111")
+	colorBody    lipgloss.TerminalColor = lipgloss.Color("#AAAAAA")
 
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
@@ -44,6 +44,17 @@ var (
 				Foreground(colorAccent).
 				Bold(true)
 
+	itemUnreadStyle = lipgloss.NewStyle().
+			Foreground(colorAccent).
+			Bold(true)
+
+	itemReadStyle = lipgloss.NewStyle().
+			Foreground(colorDim)
+
+	itemAIMarkerStyle = lipgloss.NewStyle().
+				Foreground(colorAccent).
+				Bold(true)
+
 	itemSourceStyle = lipgloss.NewStyle().
 			Foreground(colorMuted)
 
@@ -61,10 +72,6 @@ var (
 	previewBodyStyle = lipgloss.NewStyle().
 				Foreground(colorBody)
 
-	previewSummaryStyle = lipgloss.NewStyle().
-				Foreground(colorAccent).
-				Italic(true)
-
 	previewTagsStyle = lipgloss.NewStyle().
 				Foreground(colorDim)
 
@@ -72,6 +79,14 @@ var (
 				Foreground(colorDim).
 				Italic(true).
 				MarginTop(1)
+
+	fullSummaryLabelStyle = lipgloss.NewStyle().
+				Foreground(colorAccent).
+				Bold(true)
+
+	fullSummaryStyle = lipgloss.NewStyle().
+				Foreground(colorBody).
+				Italic(true)
 
 	statusBarStyle = lipgloss.NewStyle().
 			Background(colorSurface).
@@ -95,44 +110,60 @@ var (
 	helpDimStyle = lipgloss.NewStyle().
 			Foreground(colorDim)
 
-	// Briefing V2 styles — neon palette
-	briefingTitleColor = lipgloss.Color("#00FFFF")
-	briefingBodyColor  = lipgloss.Color("#E0E0E0")
-	briefingMetaColor  = lipgloss.Color("#00E5FF")
-	briefingWhyColor   = lipgloss.Color("#B0FFB0")
+	// Briefing V2 styles — set by applyTheme()
 	briefingV2TitleStyle = lipgloss.NewStyle().
-				Foreground(briefingTitleColor).
+				Foreground(lipgloss.Color("#00FFFF")).
 				Bold(true)
 
 	briefingV2BodyStyle = lipgloss.NewStyle().
-				Foreground(briefingBodyColor)
+				Foreground(lipgloss.Color("#E0E0E0"))
 
 	briefingV2MetaStyle = lipgloss.NewStyle().
-				Foreground(briefingMetaColor)
+				Foreground(lipgloss.Color("#00E5FF"))
 
 	briefingV2WhyStyle = lipgloss.NewStyle().
-				Foreground(briefingWhyColor)
+				Foreground(lipgloss.Color("#B0FFB0"))
+
+	// Shared overlay styles
+	overlayTitleStyle = lipgloss.NewStyle().
+				Foreground(colorAccent).
+				Bold(true)
+
+	overlayLabelStyle = lipgloss.NewStyle().
+				Foreground(colorText).
+				Bold(true)
+
+	overlayHintStyle = lipgloss.NewStyle().
+				Foreground(colorDim)
+
+	previewRuleStyle = lipgloss.NewStyle().
+				Foreground(colorSubtle)
+
+	previewHintStyle = lipgloss.NewStyle().
+				Foreground(colorDim).
+				MarginTop(1)
 
 	filterOverlayStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(colorAccent).
 				Padding(1, 2)
 
-	categoryColors = map[string]lipgloss.Color{
-		"AI/ML":               lipgloss.Color("#DA70D6"),
-		"Infrastructure":      lipgloss.Color("#00FFAB"),
-		"Databases":           lipgloss.Color("#7FFF00"),
-		"Distributed Systems": lipgloss.Color("#FFD700"),
-		"Security":            lipgloss.Color("#FF6B6B"),
-		"Developer Tools":     lipgloss.Color("#87CEEB"),
-		"Platform":            lipgloss.Color("#00E5FF"),
-	}
+	// Per-render cached styles (rebuilt by applyTheme)
+	itemTimeFreshStyle = lipgloss.NewStyle().Foreground(colorAccent)
 )
 
+func overlayBoxStyle(width int) lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorAccent).
+		Padding(1, 3).
+		Width(width)
+}
+
 func categoryStyle(cat string) lipgloss.Style {
-	color, ok := categoryColors[cat]
+	color, ok := currentTheme.CategoryColors[cat]
 	if !ok {
-		color = lipgloss.Color("#80DEEA")
+		color = currentTheme.CategoryDefault
 	}
 	return lipgloss.NewStyle().Foreground(color)
 }

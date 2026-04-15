@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/matheuskafuri/devnews/internal/cache"
 )
 
@@ -24,24 +25,71 @@ func relativeTime(t time.Time) string {
 	}
 }
 
+func timeColor(published time.Time) lipgloss.Style {
+	age := time.Since(published)
+	switch {
+	case age < 6*time.Hour:
+		return itemTimeFreshStyle
+	case age < 24*time.Hour:
+		return itemTimeStyle
+	default:
+		return itemReadStyle // dim for old articles
+	}
+}
+
 func renderListItem(a cache.Article, selected bool, width int) string {
 	if width < 10 {
 		width = 30
 	}
 
-	var title string
+	// Line 1: indicator + title + right-aligned markers (AI tag + time)
+	timeStr := relativeTime(a.Published)
+	timeStyle := timeColor(a.Published)
+
+	// Right side: optional AI marker + time
+	var rightParts []string
+	if a.FullSummary != "" {
+		rightParts = append(rightParts, itemAIMarkerStyle.Render("AI"))
+	}
+	rightParts = append(rightParts, timeStyle.Render(timeStr))
+	right := strings.Join(rightParts, " ")
+	rightWidth := lipgloss.Width(right)
+
+	// Left side: indicator + title
+	var indicator string
+	var titleStyle lipgloss.Style
 	if selected {
-		title = itemSelectedStyle.Render("▸ " + truncateStr(a.Title, width-4))
+		indicator = itemSelectedStyle.Render("▸ ")
+		titleStyle = itemSelectedStyle
+	} else if a.Read {
+		indicator = itemReadStyle.Render("○ ")
+		titleStyle = itemReadStyle
 	} else {
-		title = itemTitleStyle.Render("  " + truncateStr(a.Title, width-4))
+		indicator = itemUnreadStyle.Render("● ")
+		titleStyle = itemTitleStyle
 	}
 
-	meta := "  " + itemSourceStyle.Render(a.Source) + " " + itemTimeStyle.Render("· "+relativeTime(a.Published))
-	if a.Tags != "" {
-		meta += " " + itemTimeStyle.Render("· "+a.Tags)
+	maxTitle := width - 4 - rightWidth // 2 for indicator, 2 for gap
+	if maxTitle < 10 {
+		maxTitle = 10
+	}
+	titleStr := titleStyle.Render(truncateStr(a.Title, maxTitle))
+
+	gap := width - lipgloss.Width(indicator) - lipgloss.Width(titleStr) - rightWidth
+	if gap < 1 {
+		gap = 1
+	}
+	line1 := indicator + titleStr + strings.Repeat(" ", gap) + right
+
+	// Line 2: category badge (colored)
+	line2 := "    "
+	if a.Category != "" {
+		line2 += categoryStyle(a.Category).Render(a.Category)
+	} else {
+		line2 += itemSourceStyle.Render(a.Source)
 	}
 
-	return title + "\n" + meta
+	return line1 + "\n" + line2
 }
 
 func truncateStr(s string, n int) string {
