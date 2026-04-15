@@ -452,6 +452,36 @@ func TestUpdateArticleFullSummary(t *testing.T) {
 	t.Error("article aaa not found")
 }
 
+func TestMarkArticleRead(t *testing.T) {
+	db := testDB(t)
+	if err := db.UpsertArticles(sampleArticles()); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	// Initially unread
+	articles, _ := db.GetArticles(QueryOpts{})
+	for _, a := range articles {
+		if a.Read {
+			t.Errorf("article %s should be unread initially", a.ID)
+		}
+	}
+
+	// Mark as read
+	if err := db.MarkArticleRead("aaa"); err != nil {
+		t.Fatalf("MarkArticleRead: %v", err)
+	}
+
+	articles, _ = db.GetArticles(QueryOpts{})
+	for _, a := range articles {
+		if a.ID == "aaa" && !a.Read {
+			t.Error("article aaa should be read")
+		}
+		if a.ID != "aaa" && a.Read {
+			t.Errorf("article %s should still be unread", a.ID)
+		}
+	}
+}
+
 func TestOpenCreatesDir(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "sub", "deep", "test.db")

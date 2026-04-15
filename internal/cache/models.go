@@ -15,6 +15,7 @@ type Article struct {
 	Category     string
 	WhyItMatters string
 	FullSummary  string
+	Read         bool
 }
 
 type QueryOpts struct {

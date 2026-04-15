@@ -437,7 +437,13 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case "o", "enter":
 		if len(a.articles) > 0 && a.cursor < len(a.articles) {
-			return a, openBrowserCmd(a.articles[a.cursor].Link)
+			a.articles[a.cursor].Read = true
+			db := a.db
+			id := a.articles[a.cursor].ID
+			return a, tea.Batch(openBrowserCmd(a.articles[a.cursor].Link), func() tea.Msg {
+				db.MarkArticleRead(id)
+				return nil
+			})
 		}
 		return a, nil
 	case "/":
@@ -468,14 +474,12 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		if a.summarizer == nil {
-			a.mode = modeAPIKeyInput
-			a.apiKeyInput.SetValue("")
-			a.apiKeyInput.Focus()
-			a.pendingSummary = true
-			return a, textinput.Blink
+			return a, a.openAPIKeyInput(true)
 		}
 		a.summaryLoading[a.articles[a.cursor].ID] = true
 		return a, a.fetchFullSummary()
+	case "K":
+		return a, a.openAPIKeyInput(false)
 	}
 
 	return a, nil
@@ -742,6 +746,14 @@ func (a *App) View() string {
 	return view
 }
 
+func (a *App) openAPIKeyInput(pendingSummary bool) tea.Cmd {
+	a.mode = modeAPIKeyInput
+	a.apiKeyInput.SetValue("")
+	a.apiKeyInput.Focus()
+	a.pendingSummary = pendingSummary
+	return textinput.Blink
+}
+
 func (a *App) fetchFullSummary() tea.Cmd {
 	if a.summarizer == nil || len(a.articles) == 0 || a.cursor >= len(a.articles) {
 		return nil
@@ -805,6 +817,7 @@ func (a *App) renderHelp() string {
 		dim.Render("Actions") + "\n" +
 		"  o, enter      Open article in browser\n" +
 		"  S             AI summary of full article\n" +
+		"  K             Set/update OpenAI API key\n" +
 		"  r             Refresh feeds\n" +
 		"  /             Search articles\n" +
 		"  f             Toggle source filter mode\n\n" +
