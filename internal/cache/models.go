@@ -14,6 +14,7 @@ type Article struct {
 	Tags         string
 	Category     string
 	WhyItMatters string
+	FullSummary  string
 }
 
 type QueryOpts struct {

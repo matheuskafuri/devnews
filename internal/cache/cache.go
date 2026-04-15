@@ -74,6 +74,9 @@ func (c *Cache) init() error {
 	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN category TEXT NOT NULL DEFAULT ''")
 	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN why_it_matters TEXT NOT NULL DEFAULT ''")
 
+	// Migrate: add full_summary column for AI article summaries
+	c.writeDB.Exec("ALTER TABLE articles ADD COLUMN full_summary TEXT NOT NULL DEFAULT ''")
+
 	return nil
 }
 
@@ -154,7 +157,7 @@ func (c *Cache) GetArticles(opts QueryOpts) ([]Article, error) {
 		args = append(args, opts.Category)
 	}
 
-	query := "SELECT id, source, title, link, description, published, fetched_at, summary, tags, category, why_it_matters FROM articles"
+	query := "SELECT id, source, title, link, description, published, fetched_at, summary, tags, category, why_it_matters, full_summary FROM articles"
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
@@ -176,7 +179,7 @@ func (c *Cache) GetArticles(opts QueryOpts) ([]Article, error) {
 	var articles []Article
 	for rows.Next() {
 		var a Article
-		if err := rows.Scan(&a.ID, &a.Source, &a.Title, &a.Link, &a.Description, &a.Published, &a.FetchedAt, &a.Summary, &a.Tags, &a.Category, &a.WhyItMatters); err != nil {
+		if err := rows.Scan(&a.ID, &a.Source, &a.Title, &a.Link, &a.Description, &a.Published, &a.FetchedAt, &a.Summary, &a.Tags, &a.Category, &a.WhyItMatters, &a.FullSummary); err != nil {
 			return nil, fmt.Errorf("scanning article: %w", err)
 		}
 		articles = append(articles, a)
@@ -307,7 +310,7 @@ func (c *Cache) SetLastOpened() error {
 // GetArticlesSince returns articles published after the given time.
 func (c *Cache) GetArticlesSince(since time.Time) ([]Article, error) {
 	rows, err := c.readDB.Query(
-		"SELECT id, source, title, link, description, published, fetched_at, summary, tags, category, why_it_matters FROM articles WHERE published >= ? ORDER BY published DESC",
+		"SELECT id, source, title, link, description, published, fetched_at, summary, tags, category, why_it_matters, full_summary FROM articles WHERE published >= ? ORDER BY published DESC",
 		since,
 	)
 	if err != nil {
@@ -318,7 +321,7 @@ func (c *Cache) GetArticlesSince(since time.Time) ([]Article, error) {
 	var articles []Article
 	for rows.Next() {
 		var a Article
-		if err := rows.Scan(&a.ID, &a.Source, &a.Title, &a.Link, &a.Description, &a.Published, &a.FetchedAt, &a.Summary, &a.Tags, &a.Category, &a.WhyItMatters); err != nil {
+		if err := rows.Scan(&a.ID, &a.Source, &a.Title, &a.Link, &a.Description, &a.Published, &a.FetchedAt, &a.Summary, &a.Tags, &a.Category, &a.WhyItMatters, &a.FullSummary); err != nil {
 			return nil, err
 		}
 		articles = append(articles, a)
@@ -335,6 +338,12 @@ func (c *Cache) UpdateArticleCategory(id, category string) error {
 // UpdateArticleWhyItMatters saves the "why it matters" text for an article.
 func (c *Cache) UpdateArticleWhyItMatters(id, text string) error {
 	_, err := c.writeDB.Exec("UPDATE articles SET why_it_matters = ? WHERE id = ?", text, id)
+	return err
+}
+
+// UpdateArticleFullSummary saves an AI-generated full article summary.
+func (c *Cache) UpdateArticleFullSummary(id, fullSummary string) error {
+	_, err := c.writeDB.Exec("UPDATE articles SET full_summary = ? WHERE id = ?", fullSummary, id)
 	return err
 }
 

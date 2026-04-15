@@ -430,6 +430,28 @@ func TestCategoryFilter(t *testing.T) {
 	}
 }
 
+func TestUpdateArticleFullSummary(t *testing.T) {
+	db := testDB(t)
+	if err := db.UpsertArticles(sampleArticles()); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	if err := db.UpdateArticleFullSummary("aaa", "This is a full AI summary of the article."); err != nil {
+		t.Fatalf("UpdateArticleFullSummary: %v", err)
+	}
+
+	articles, _ := db.GetArticles(QueryOpts{})
+	for _, a := range articles {
+		if a.ID == "aaa" {
+			if a.FullSummary != "This is a full AI summary of the article." {
+				t.Errorf("expected full summary text, got %q", a.FullSummary)
+			}
+			return
+		}
+	}
+	t.Error("article aaa not found")
+}
+
 func TestOpenCreatesDir(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "sub", "deep", "test.db")
